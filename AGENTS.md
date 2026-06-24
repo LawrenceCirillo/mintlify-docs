@@ -1,33 +1,43 @@
-> **First-time setup**: Customize this file for your project. Prompt the user to customize this file for their project.
-> For Mintlify product knowledge (components, configuration, writing standards),
-> install the Mintlify skill: `npx skills add https://mintlify.com/docs`
-
-# Documentation project instructions
+# Home Service Data — Mintlify docs
 
 ## About this project
 
-- This is a documentation site built on [Mintlify](https://mintlify.com)
-- Pages are MDX files with YAML frontmatter
-- Configuration lives in `docs.json`
-- Use the Mintlify MCP server, `https://mcp.mintlify.com`, to edit content and settings via MCP
-- Use the Mintlify docs MCP server, `https://www.mintlify.com/docs/mcp`, to query information about using Mintlify via MCP
+- Documentation for [Home Service Data](https://homeservicedata.com), deployed at `https://homeservicedata.mintlify.app`
+- Source repo: `https://github.com/LawrenceCirillo/mintlify-docs`
+- App codebase lives in the sibling `homeservicedataapp` workspace (`app/`)
+- Pages are MDX with YAML frontmatter; site config is `docs.json`
+- Preview locally: `mint dev` from this directory (requires [Mintlify CLI](https://www.npmjs.com/package/mint))
+
+## How to edit
+
+1. **Direct edits (preferred in Cursor):** change MDX files here, commit, and push to `main`. Mintlify deploys from GitHub.
+2. **Search/read live content:** MCP server `https://homeservicedata.mintlify.app/mcp`
+3. **Admin MCP (PR workflow):** `https://mcp.mintlify.com` — requires OAuth login in Cursor MCP settings
+
+When app behavior changes, update the matching docs page and keep API examples aligned with `app/app/api/v1/`.
 
 ## Terminology
 
-{/* Add product-specific terms and preferred usage */}
-{/* Example: Use "workspace" not "project", "member" not "user" */}
+- **Home Service Data** / **HSD** — the product and API platform
+- **Quote-safe** — records approved for customer-facing quotes (`quote_safe: true`)
+- **Context-only** — background data; must not drive live quote math (`quote_safe: false`)
+- **Data packet** — a typed dataset slice (finance, equipment, incentives, etc.)
+- **Access level** — `sample`, `sandbox`, or `production` scope on an API key
+- **Quote context** — composite `/quote-context` response bundling finance, equipment, incentives, and local context
+- **Sync** — snapshot + delta endpoints for keeping a local database current
 
 ## Style preferences
-
-{/* Add any project-specific style rules below */}
 
 - Use active voice and second person ("you")
 - Keep sentences concise — one idea per sentence
 - Use sentence case for headings
-- Bold for UI elements: Click **Settings**
-- Code formatting for file names, commands, paths, and code references
+- Bold UI elements: Click **Settings**
+- Code formatting for file names, commands, paths, and API fields
+- Prefer real endpoint paths and JSON shapes that match production responses
 
 ## Content boundaries
 
-{/* Define what should and shouldn't be documented */}
-{/* Example: Don't document internal admin features */}
+- Document the public REST API, dashboard workflows, and integration guides
+- Do not document internal admin ingestion pipelines or unreleased endpoints
+- Do not expose secrets, API keys, or internal Supabase details
+- Link to `https://homeservicedata.com/dashboard` and `https://homeservicedata.com/contact` for product actions
