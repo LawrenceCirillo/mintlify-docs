@@ -1,0 +1,159 @@
+---
+title: "Data Packets: How Home Service Data Organizes Datasets"
+sidebarTitle: "Data Packets"
+description: "Named, versioned datasets in finance, equipment, and context domains. Each packet has its own API endpoint, access scope, and quote-safe coverage."
+---
+
+Home Service Data organizes every dataset into a **data packet**: a named, versioned collection of records that you can fetch via API, sync incrementally, and filter by quote-safe status. Packets belong to one of three domains — Finance, Equipment, or Context — and each packet is independently scoped, versioned, and reviewed. When you request access to the platform, you request access to specific packets at a specific level, not to a single monolithic database.
+
+## What Is a Data Packet?
+
+A data packet is the primary unit of data delivery on Home Service Data. Each packet has:
+
+- A **dataset key** — a stable string identifier used in every API call (e.g., `finance_fees`)
+- A **title** and **description** — human-readable labels shown in the Data Catalog
+- A **default endpoint** — the primary API route that returns its records
+- A **version** — an incrementing number published each time the underlying records are reviewed and updated
+- A **quote-safe count** — the number of records in the current version that carry `quote_safe: true`
+
+Every record in every packet carries a `quote_safe` boolean. You can filter your requests to return only quote-safe records, or receive the full set and filter in your application. See [Quote-Safe Data](/concepts/quote-safe) for the full rules.
+
+## Available Dataset Keys
+
+The table below lists every packet currently available. Use the **dataset key** exactly as shown when calling API endpoints or the SDK.
+
+| Dataset Key | Title | Description |
+|---|---|---|
+| `finance_fees` | Finance Fee Records | Approved current dealer-fee and finance-program rows used by quote tools |
+| `finance_products` | Finance Product Context | Lender and program quick-fact context kept separate from quote-safe dealer-fee tables |
+| `finance_eligibility` | Finance Eligibility Records | Scoped lender/PACE eligible-product records with permit, term, and quote-safe review state |
+| `equipment_pricing` | Equipment Price Observations | Published equipment and service price observations with source kind, confidence, and quote-safe flags |
+| `utility_territory` | Utility Territory | Utility providers and service territory context for resolver and market workflows |
+| `electricity_rates` | Electricity Rate Context | Regional EIA/context electricity averages for market analysis, not tariff truth |
+| `hvac_incentives` | HVAC Incentives | Program-level HVAC incentive records with source and review state |
+| `hvac_climate` | HVAC Climate Context | County climate and weather-normal context for HVAC assumptions |
+| `hvac_labor` | HVAC Labor Adders | Labor and material adder context with source basis and review state |
+| `hvac_ahri_matches` | HVAC AHRI Match Context | AHRI/ENERGY STAR matched-system records with license and quote-safe gates |
+
+<Note>
+  Dataset keys are stable across API versions. If a packet is renamed or deprecated, Home Service Data publishes a migration notice before removing the old key.
+</Note>
+
+## Domains
+
+Packets are grouped into three logical domains based on their subject matter and how they are typically used in quoting and workflow systems.
+
+<CardGroup cols={2}>
+  <Card title="Finance" icon="building-columns">
+    Dealer fees, lender programs, and eligibility rules — the packets you reach for when building a payment calculator or qualifying a customer for financing.
+  </Card>
+  <Card title="Equipment" icon="wrench">
+    Observed equipment prices across solar, HVAC, roofing, plumbing, and electrical — sourced from distributor and market price observations.
+  </Card>
+  <Card title="Context" icon="map">
+    Supporting data that enriches quotes — utility territory, electricity rates, HVAC incentives, climate zones, labor adders, and AHRI system matches.
+  </Card>
+  <Card title="All Trades" icon="house">
+    Most packets carry a `trade_category` field. Filter any request to a specific trade: `solar`, `hvac`, `roofing`, `plumbing`, or `electrical`.
+  </Card>
+</CardGroup>
+
+### Finance Domain
+
+The Finance domain covers three packets that together give you the data needed to present financing options to a customer.
+
+<Accordion title="finance_fees — Finance Fee Records">
+  **Endpoint:** `/api/v1/finance/fees`
+
+  The `finance_fees` packet contains the approved, current dealer-fee and finance-program rows that your quoting tool can use directly to calculate monthly payments. Each record includes the financier name, product title, payment type, interest rate, term in months, fee percentage, and effective/expiry dates. Only rows that have passed lender verification carry `quote_safe: true`.
+
+  Key fields: `financier_name`, `product_title`, `payment_type`, `interest_rate`, `term_months`, `fee_percentage`, `effective_date`, `expires_at`, `last_verified_at`, `quote_safe`
+</Accordion>
+
+<Accordion title="finance_products — Finance Product Context">
+  **Endpoint:** `/api/v1/context/finance-products`
+
+  The `finance_products` packet holds lender and program quick-fact context that supplements the fee records. It includes APR ranges, loan amount bounds, term ranges, eligible and ineligible measures, and dealer fee structures. These records are context-quality — most carry `quote_safe: false` because they describe program parameters rather than verified installable rates.
+
+  Key fields: `financier_name`, `product_name`, `product_type`, `state_scope`, `loan_amount_min`, `loan_amount_max`, `apr_min`, `apr_max`, `dealer_fee_type`, `quote_safe`, `confidence`
+</Accordion>
+
+<Accordion title="finance_eligibility — Finance Eligibility Records">
+  **Endpoint:** `/api/v1/context/finance-eligibility`
+
+  The `finance_eligibility` packet contains scoped lender and PACE eligible-product records that define where and for what measures a program applies. Records include state and county scope, eligibility criteria, permit requirements, and maximum term. Quote-safe rows have passed review against the source document; context-only rows are informational.
+
+  Key fields: `financier_name`, `program_name`, `program_type`, `trade_category`, `measure_key`, `criteria_scope`, `state_code`, `county_name`, `permit_required`, `max_term_years`, `quote_safe`, `confidence`
+</Accordion>
+
+### Equipment Domain
+
+<Accordion title="equipment_pricing — Equipment Price Observations">
+  **Endpoint:** `/api/v1/context/pricing`
+
+  The `equipment_pricing` packet captures observed prices for equipment and services across all supported trades. Records include manufacturer, model number, tonnage, SEER2/HSPF2 ratings, refrigerant type, and price range observations (low, mid, high). The `price_kind` field distinguishes distributor prices from market observations. Quote-safe rows have a verified source and confidence score.
+
+  Key fields: `trade_category`, `equipment_category`, `manufacturer`, `model_number`, `product_type`, `observed_price`, `observed_price_low`, `observed_price_high`, `price_kind`, `source_kind`, `quote_safe`, `confidence`
+</Accordion>
+
+### Context Domain
+
+<Accordion title="utility_territory — Utility Territory">
+  **Endpoint:** `/api/v1/context/utility-territory`
+
+  Utility provider and service territory records keyed by state, county, city, and ZIP. Used by the utility resolver to map a customer address to their utility provider. Records include coverage level, resolution priority, and geometry status. This packet underpins solar savings calculations and electricity-rate lookups.
+
+  Key fields: `state_code`, `county_name`, `city_name`, `zip_code`, `coverage_level`, `resolution_priority`, `quote_safe`, `confidence`
+</Accordion>
+
+<Accordion title="electricity_rates — Electricity Rate Context">
+  **Endpoint:** `/api/v1/context/electricity-rates`
+
+  Regional EIA-sourced electricity averages by state and region, expressed in cents per kWh and USD per kWh across residential, commercial, industrial, and transportation sectors. These are market-analysis averages, not individual tariff schedules. Most records are context-quality (`quote_safe: false`).
+
+  Key fields: `state_code`, `region_name`, `data_year`, `residential_cents_per_kwh`, `commercial_cents_per_kwh`, `residential_usd_per_kwh`, `total_usd_per_kwh`
+</Accordion>
+
+<Accordion title="hvac_incentives — HVAC Incentives">
+  **Endpoint:** `/api/v1/context/incentives`
+
+  Program-level HVAC incentive records covering federal, state, and utility authority types. Includes effective and expiry dates, stacking rules, and review state. Quote-safe rows carry a verified source URL and passing confidence score.
+
+  Key fields: `program_name`, `authority`, `authority_type`, `program_type`, `trade_category`, `effective_date`, `expires_at`, `stacking_rules`, `quote_safe`, `confidence`
+</Accordion>
+
+<Accordion title="hvac_climate — HVAC Climate Context">
+  **Endpoint:** `/api/v1/context/climate`
+
+  County-level climate and weather-normal data for HVAC load calculations. Includes IECC climate zone, Building America region, heating/cooling degree-days, and design temperature extremes. Records are reference data and are typically context-only.
+
+  Key fields: `state_code`, `county_name`, `county_fips`, `iecc_climate_zone`, `building_america_region`, `hdd_65`, `cdd_65`, `design_heating_temp_f`, `design_cooling_temp_f`, `quote_safe`
+</Accordion>
+
+<Accordion title="hvac_labor — HVAC Labor Adders">
+  **Endpoint:** `/api/v1/context/labor-adders`
+
+  Labor and material adder catalog with cost ranges and labor hour estimates per adder type. Records include the adder group, unit of measure, amount type, cost low/high, and labor hours low/high. Quote-safe rows have a documented source basis.
+
+  Key fields: `trade_category`, `adder_key`, `adder_label`, `adder_group`, `unit`, `amount_type`, `cost_low`, `cost_high`, `labor_hours_low`, `labor_hours_high`, `source_basis`, `quote_safe`
+</Accordion>
+
+<Accordion title="hvac_ahri_matches — HVAC AHRI Match Context">
+  **Endpoint:** `/api/v1/context/ahri-matches`
+
+  AHRI and ENERGY STAR matched-system records pairing outdoor and indoor units with certified efficiency ratings. Records include SEER2, EER2, HSPF2, and heating capacity at multiple temperature points. AHRI records require a license entitlement before they become quote-safe. See [Quote-Safe Data](/concepts/quote-safe) for the AHRI gate.
+
+  Key fields: `ahri_reference_number`, `outdoor_unit_brand_name`, `outdoor_unit_model_number`, `indoor_unit_brand_name`, `indoor_unit_model_number`, `seer2_rating`, `hspf2_rating`, `cooling_capacity_btu_h`, `exact_match`, `quote_safe`
+</Accordion>
+
+## Access Scoping Per Packet
+
+Your account's entitlement determines the maximum access level you can reach across all packets. Within that ceiling, each API key you create can be narrowed to a lower level. This means you can issue a `sandbox`-scoped key for development environments even if your account holds `production` entitlement.
+
+When you make a request, the platform resolves access by comparing the key's scope against your account entitlement and applies the lower of the two. If a packet requires a higher level than your key or entitlement allows, the request is rejected with an authorization error.
+
+<Tip>
+  The Data Catalog in your dashboard shows the current access level and quote-safe coverage for each packet. Use it to verify entitlement before integrating a new packet into your quoting workflow.
+</Tip>
+
+For the full breakdown of levels and what each unlocks, see [API Access Levels](/concepts/access-levels).

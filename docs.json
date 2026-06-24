@@ -1,0 +1,146 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Home Service Data",
+  "colors": {
+    "primary": "#0404d3",
+    "light": "#00c4ff",
+    "dark": "#0000ff"
+  },
+  "favicon": "https://media.brand.dev/86c409b8-dae0-4705-8415-791519d2baa7.svg",
+  "logo": {
+    "light": "/images/HSDLogoblack.svg",
+    "dark": "/images/HSDLogo.svg"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Request Access",
+        "href": "https://homeservicedata.com/contact"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Dashboard",
+      "href": "https://homeservicedata.com/dashboard"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "authentication"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/data-packets",
+              "concepts/quote-safe",
+              "concepts/access-levels",
+              "concepts/sync-model"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/quoting-tools",
+              "guides/crm-integration",
+              "guides/sync-integration",
+              "guides/webhooks",
+              "guides/compare-hub"
+            ]
+          },
+          {
+            "group": "Dashboard",
+            "pages": [
+              "dashboard/catalog",
+              "dashboard/playground",
+              "dashboard/api-keys"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/overview",
+              "api-reference/errors"
+            ]
+          },
+          {
+            "group": "Search & Catalog",
+            "pages": [
+              "api-reference/search",
+              "api-reference/catalog-equipment"
+            ]
+          },
+          {
+            "group": "Finance",
+            "pages": [
+              "api-reference/finance-fees",
+              "api-reference/finance-products",
+              "api-reference/finance-eligibility",
+              "api-reference/finance-pricing"
+            ]
+          },
+          {
+            "group": "Equipment & Hardware",
+            "pages": [
+              "api-reference/hardware-inverters",
+              "api-reference/benchmarks"
+            ]
+          },
+          {
+            "group": "Context Datasets",
+            "pages": [
+              "api-reference/context-hvac",
+              "api-reference/context-incentives",
+              "api-reference/context-climate",
+              "api-reference/context-utility-territory",
+              "api-reference/context-electricity-rates",
+              "api-reference/context-labor",
+              "api-reference/context-permits",
+              "api-reference/context-roofing",
+              "api-reference/context-ahri"
+            ]
+          },
+          {
+            "group": "Composite",
+            "pages": [
+              "api-reference/quote-context"
+            ]
+          },
+          {
+            "group": "Sync",
+            "pages": [
+              "api-reference/sync-snapshot",
+              "api-reference/sync-changes"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "footer": {
+    "socials": {}
+  },
+  "fonts": {
+    "heading": {
+      "family": "Plus Jakarta Sans",
+      "weight": 400
+    },
+    "body": {
+      "family": "Inter"
+    }
+  }
+}

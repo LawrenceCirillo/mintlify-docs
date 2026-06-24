@@ -1,0 +1,159 @@
+---
+title: "GET /api/v1/context/incentives — Program Incentives"
+sidebarTitle: "Incentives"
+description: "Query program-level incentive records across trades and jurisdictions — federal, state, utility, and local — with quote-safe and status filters."
+---
+
+The incentives context endpoint exposes program-level rebate, tax credit, and financing incentive records for HVAC, solar, roofing, plumbing, and electrical trades. Records are sourced from official program portals, utility websites, and government databases. Each record carries a `quote_safe` flag indicating whether the program data is deterministic enough for customer-facing quote presentation. Use the `status` filter to restrict results to active programs, and the `equipment_id` parameter to automatically infer the relevant measure from a matched HVAC product.
+
+**Endpoint**
+
+```
+GET https://homeservicedata.com/api/v1/context/incentives
+```
+
+## Query Parameters
+
+<ParamField query="trade" type="string" default="hvac">
+  Trade vertical to filter by. One of: `hvac`, `solar`, `roofing`, `plumbing`, `electrical`.
+</ParamField>
+
+<ParamField query="state" type="string">
+  Two-letter state code (e.g., `CA`, `TX`). Case-insensitive.
+</ParamField>
+
+<ParamField query="utility" type="string">
+  Utility provider name or slug to filter programs offered by that utility.
+</ParamField>
+
+<ParamField query="measure" type="string">
+  Measure key used to filter programs applicable to a specific installation type (e.g., `heat_pump_central`, `central_ac`). Overrides the measure inferred from `equipment_id`.
+</ParamField>
+
+<ParamField query="equipment_id" type="string">
+  HSD equipment record ID. When provided, the API resolves the associated `measure_key` and uses it to filter relevant programs automatically.
+</ParamField>
+
+<ParamField query="status" type="string">
+  Filter by program status. One of: `active`, `planned`, `paused`, `waitlist`, `expired`, `superseded`, `state_dependent`, `limited`, `unknown`.
+</ParamField>
+
+<ParamField query="income_band" type="string">
+  Filter by income qualification tier. One of: `low_income`, `moderate_income`, `market_rate`, `unknown`.
+</ParamField>
+
+<ParamField query="quote_safe" type="boolean">
+  When `true`, returns only records cleared for customer-facing quote use.
+</ParamField>
+
+<ParamField query="include_expired" type="boolean" default="false">
+  When `true`, includes programs with `status: expired` that would otherwise be excluded.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="100">
+  Maximum number of records to return. Capped at `500`.
+</ParamField>
+
+<Note>
+  Supplying `equipment_id` causes the API to look up the equipment record and infer the `measure_key`. If the equipment ID is not found a `404` is returned. Explicitly passing `measure` always takes precedence over the inferred value.
+</Note>
+
+## Response Fields
+
+<ResponseField name="records" type="array">
+  Array of incentive program objects.
+
+  <Expandable title="Record fields">
+    <ResponseField name="id" type="string">Unique record identifier.</ResponseField>
+    <ResponseField name="program_key" type="string">Normalized slug key for the program (e.g., `ca-sgip-heat-pump`).</ResponseField>
+    <ResponseField name="program_name" type="string">Human-readable program name.</ResponseField>
+    <ResponseField name="authority" type="string">Name of the administering organization (utility, government body, etc.).</ResponseField>
+    <ResponseField name="authority_type" type="string">Type of authority: `federal`, `state`, `utility`, `local`, `nonprofit`, or `unknown`.</ResponseField>
+    <ResponseField name="program_type" type="string">Incentive category: `rebate`, `tax_credit`, `loan`, `grant`, `pace`, `on_bill_financing`, or `other`.</ResponseField>
+    <ResponseField name="trade_category" type="string">Trade this program applies to.</ResponseField>
+    <ResponseField name="summary" type="string | null">Plain-language description of the program benefits.</ResponseField>
+    <ResponseField name="status" type="string">Current program status.</ResponseField>
+    <ResponseField name="effective_date" type="string | null">ISO 8601 date when the program became active.</ResponseField>
+    <ResponseField name="expires_at" type="string | null">ISO 8601 date when the program expires, if known.</ResponseField>
+    <ResponseField name="last_verified_at" type="string | null">ISO 8601 timestamp of the most recent data verification.</ResponseField>
+    <ResponseField name="source_url" type="string | null">URL to the authoritative program page.</ResponseField>
+    <ResponseField name="quote_safe" type="boolean">Whether this record is safe for use in customer-facing quotes.</ResponseField>
+    <ResponseField name="confidence" type="string | null">Confidence tier: `high`, `medium`, or `low`.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="coverage" type="object">
+  Summary metadata about the query result.
+
+  <Expandable title="Coverage fields">
+    <ResponseField name="trade" type="string">Trade filter applied.</ResponseField>
+    <ResponseField name="state" type="string | null">State filter applied.</ResponseField>
+    <ResponseField name="utility" type="string | null">Utility filter applied.</ResponseField>
+    <ResponseField name="measure" type="string | null">Measure key used (explicit or inferred).</ResponseField>
+    <ResponseField name="equipment_context" type="object | null">Resolved equipment context if `equipment_id` was provided.</ResponseField>
+    <ResponseField name="records_returned" type="integer">Number of records in the response.</ResponseField>
+    <ResponseField name="quote_safe_only" type="boolean">Whether results were restricted to quote-safe records.</ResponseField>
+    <ResponseField name="includes_expired" type="boolean">Whether expired programs were included.</ResponseField>
+    <ResponseField name="trust_basis" type="string">Description of the trust model applied to this dataset.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Tip>
+  Filter by `status=active` and `quote_safe=true` to get the smallest, highest-confidence set suitable for presenting rebate estimates directly to homeowners.
+</Tip>
+
+## Example Request
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://homeservicedata.com/api/v1/context/incentives \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "trade=hvac" \
+  --data-urlencode "state=CA" \
+  --data-urlencode "status=active" \
+  --data-urlencode "quote_safe=true" \
+  --data-urlencode "limit=5"
+```
+
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "records": [
+      {
+        "id": "inc_01hzka1bc2de3fg4hi5jk6lmno",
+        "program_key": "ca-utility-heat-pump-rebate",
+        "program_name": "Home Energy Efficiency Rebate — Heat Pump",
+        "authority": "Southern California Edison",
+        "authority_type": "utility",
+        "program_type": "rebate",
+        "trade_category": "hvac",
+        "summary": "Up to $1,000 rebate for qualifying ducted heat pump installations replacing a gas furnace.",
+        "status": "active",
+        "effective_date": "2024-01-01",
+        "expires_at": "2024-12-31",
+        "last_verified_at": "2024-10-20T14:00:00Z",
+        "source_url": "https://www.sce.com/residential/rebates/heat-pump",
+        "quote_safe": true,
+        "confidence": "high"
+      }
+    ],
+    "coverage": {
+      "trade": "hvac",
+      "state": "CA",
+      "utility": null,
+      "measure": null,
+      "equipment_context": null,
+      "records_returned": 1,
+      "quote_safe_only": true,
+      "includes_expired": false,
+      "trust_basis": "Official sources first; uncertain state-dependent, waitlist, missing amount, or non-deterministic records return with quote_safe=false."
+    }
+  }
+}
+```

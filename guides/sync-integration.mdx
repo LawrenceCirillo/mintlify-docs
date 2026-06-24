@@ -1,0 +1,286 @@
+---
+title: "Sync Home Service Data Datasets to Your Database"
+sidebarTitle: "Sync Integration"
+description: "Keep a local database mirror of any HSD dataset using snapshot and delta endpoints for low-latency, offline-resilient quote paths."
+---
+
+Calling the Home Service Data API on every quote request is fine when you are getting started, but it introduces network latency into the most time-sensitive part of your workflow. A local sync gives you sub-millisecond data access, protects your quote path from transient API availability, and lets you query HSD data with your own SQL joins and filters. Home Service Data is designed for this pattern: every dataset exposes a snapshot endpoint and a cursor-driven delta endpoint so you can keep a local mirror accurate without ever doing a full re-download.
+
+## Why sync locally?
+
+<CardGroup cols={2}>
+  <Card title="Lower latency" icon="zap">
+    Serve quote data from your own database with no outbound API call in the critical path. Response times drop from hundreds of milliseconds to single-digit milliseconds.
+  </Card>
+  <Card title="Offline resilience" icon="cloud-off">
+    Your quoting tool keeps working during a network interruption. The local table is the source of truth for your application; HSD keeps it current.
+  </Card>
+  <Card title="SQL flexibility" icon="database">
+    Join HSD datasets against your own tables. Filter, sort, and aggregate using your database's native query planner instead of URL parameters.
+  </Card>
+  <Card title="Predictable API usage" icon="bar-chart">
+    Sync runs on a schedule you control. You consume API budget in planned batches rather than at the mercy of unpredictable quote volume.
+  </Card>
+</CardGroup>
+
+## Available dataset keys
+
+The `HsdDatasetKey` type (exported from the SDK) defines the datasets available for sync:
+
+```typescript
+type HsdDatasetKey =
+  | "finance_fees"        // Dealer fee and rate rows for active finance programs
+  | "finance_products"    // Lender program quick-fact context
+  | "finance_eligibility" // Scoped lender/PACE eligibility records by state and county
+  | "equipment_pricing";  // Equipment price observations with confidence and quote-safe flags
+```
+
+## Sync flow
+
+The sync process follows five deterministic steps. The cursor is the key primitive — it is an opaque string that encodes the dataset version and position. Store it after every successful sync and pass it on the next delta call.
+
+<Steps>
+  <Step title="Fetch a full snapshot">
+    Call `/api/v1/sync/snapshot` with the dataset key and optional trade filter. The response contains all current records plus a `cursor` you will store for future delta calls.
+
+    ```typescript
+    import { createHsdClient } from "hsd-client-sdk";
+    import type { HsdDatasetKey } from "hsd-client-sdk";
+
+    const hsd = createHsdClient({
+      apiKey: process.env.HSD_API_KEY!,
+      baseUrl: "https://homeservicedata.com",
+    });
+
+    async function runInitialSnapshot(dataset: HsdDatasetKey) {
+      const snapshot = await hsd.getSnapshot(dataset, {
+        trade: "hvac", // omit to get all trades
+      });
+
+      console.log(`Snapshot: ${snapshot.records.length} records`);
+      console.log(`Cursor: ${snapshot.sync.cursor}`);
+
+      return snapshot;
+    }
+    ```
+
+    The snapshot response shape:
+
+    ```json
+    {
+      "dataset": {
+        "key": "finance_fees",
+        "title": "Finance Fee Records",
+        "trade": "hvac"
+      },
+      "version": {
+        "id": "...",
+        "number": 42,
+        "cursor": "finance_fees:v42:...",
+        "published_at": "2025-01-15T14:00:00Z",
+        "row_count": 287,
+        "quote_safe_count": 251
+      },
+      "records": [ /* all current records */ ],
+      "sync": {
+        "mode": "snapshot",
+        "etag": "W/\"hsd:finance_fees:hvac:...:1000\"",
+        "cursor": "finance_fees:v42:...",
+        "changes_url": "https://homeservicedata.com/api/v1/sync/changes?dataset=finance_fees&since=..."
+      }
+    }
+    ```
+
+  </Step>
+  <Step title="Store the cursor">
+    Persist the cursor from `snapshot.sync.cursor` to a durable store — your database, a config table, or a key-value store. The cursor is opaque; treat it as a string you pass back verbatim.
+
+    ```typescript
+    // Example: store in a simple config table
+    await db.query(
+      "INSERT INTO hsd_sync_cursors (dataset_key, cursor, synced_at) VALUES ($1, $2, NOW()) ON CONFLICT (dataset_key) DO UPDATE SET cursor = $2, synced_at = NOW()",
+      [dataset, snapshot.sync.cursor]
+    );
+    ```
+
+    <Warning>
+    Never skip the cursor update step. If your application crashes between applying changes and persisting the new cursor, you will reprocess the same changes on the next run — but that is safe because all change operations are idempotent. Skipping the cursor update entirely causes your local table to drift permanently.
+    </Warning>
+
+  </Step>
+  <Step title="Poll for changes with the cursor">
+    On your scheduled interval (every 15–60 minutes is typical), read the stored cursor and call `/api/v1/sync/changes`. If the server responds with HTTP `304 Not Modified` (ETag match), there are no new changes and you can skip the remaining steps.
+
+    ```typescript
+    async function pollChanges(dataset: HsdDatasetKey) {
+      const cursor = await db.getCursor(dataset);
+
+      if (!cursor) {
+        // No cursor means we have never synced — run the snapshot flow first
+        const snapshot = await hsd.getSnapshot(dataset);
+        await seedDatabase(snapshot.records);
+        await db.setCursor(dataset, snapshot.sync.cursor);
+        return;
+      }
+
+      const delta = await hsd.getChanges(dataset, cursor);
+
+      if (!delta.has_changes) {
+        console.log(`No changes for ${dataset} since cursor ${cursor}`);
+        return;
+      }
+
+      console.log(`${delta.changes.length} changes for ${dataset}`);
+      return delta;
+    }
+    ```
+
+  </Step>
+  <Step title="Apply upserts and deletes">
+    Iterate through `delta.changes` and apply each operation to your local table. Three operation types are possible:
+
+    | Operation | What to do |
+    |---|---|
+    | `upsert` | Insert or update the record using `record_id` as the primary key |
+    | `delete` | Remove the record with matching `record_id` from your local table |
+    | `supersede` | Write the new payload over the old record; the old version is no longer authoritative |
+
+    ```typescript
+    async function applyChanges(
+      changes: Awaited<ReturnType<typeof hsd.getChanges>>["changes"]
+    ) {
+      for (const change of changes) {
+        if (change.operation === "delete") {
+          await db.query(
+            "DELETE FROM hsd_finance_fees WHERE record_id = $1",
+            [change.record_id]
+          );
+        } else {
+          // upsert and supersede both write the latest payload
+          await db.query(
+            `INSERT INTO hsd_finance_fees (record_id, dataset_key, trade_category, payload, updated_at)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (record_id) DO UPDATE
+             SET payload = $4, trade_category = $3, updated_at = $5`,
+            [
+              change.record_id,
+              change.dataset_key,
+              change.trade_category,
+              change.payload,
+              change.record_updated_at,
+            ]
+          );
+        }
+      }
+    }
+    ```
+
+  </Step>
+  <Step title="Store the new cursor">
+    After all changes are successfully applied, persist `delta.latest_cursor` to replace the previous cursor. Your next poll will start from this position.
+
+    ```typescript
+    async function runSync(dataset: HsdDatasetKey) {
+      const delta = await pollChanges(dataset);
+      if (!delta) return; // no changes or no cursor yet
+
+      await applyChanges(delta.changes);
+
+      // Persist the new cursor only after changes are successfully written
+      await db.setCursor(dataset, delta.latest_cursor);
+
+      console.log(`Sync complete. New cursor: ${delta.latest_cursor}`);
+    }
+    ```
+
+  </Step>
+</Steps>
+
+## Putting it together: a complete sync runner
+
+```typescript
+import { createHsdClient } from "hsd-client-sdk";
+import type { HsdDatasetKey } from "hsd-client-sdk";
+
+const hsd = createHsdClient({
+  apiKey: process.env.HSD_API_KEY!,
+  baseUrl: "https://homeservicedata.com",
+});
+
+const DATASETS_TO_SYNC: HsdDatasetKey[] = [
+  "finance_fees",
+  "finance_eligibility",
+];
+
+async function syncDataset(dataset: HsdDatasetKey) {
+  const cursor = await db.getCursor(dataset);
+
+  if (!cursor) {
+    // Initial load — fetch the full snapshot
+    const snapshot = await hsd.getSnapshot(dataset);
+    await db.bulkUpsert("hsd_records", snapshot.records);
+    await db.setCursor(dataset, snapshot.sync.cursor);
+    console.log(`[${dataset}] Snapshot complete: ${snapshot.records.length} rows`);
+    return;
+  }
+
+  const delta = await hsd.getChanges(dataset, cursor);
+
+  if (!delta.has_changes) {
+    console.log(`[${dataset}] No changes`);
+    return;
+  }
+
+  for (const change of delta.changes) {
+    if (change.operation === "delete") {
+      await db.delete("hsd_records", change.record_id);
+    } else {
+      await db.upsert("hsd_records", change.record_id, change.payload);
+    }
+  }
+
+  // Persist new cursor after writes are committed
+  await db.setCursor(dataset, delta.latest_cursor);
+  console.log(`[${dataset}] Applied ${delta.changes.length} changes`);
+}
+
+// Run all datasets in parallel
+await Promise.all(DATASETS_TO_SYNC.map(syncDataset));
+```
+
+## Using ETags to skip no-op polls
+
+The snapshot response includes an `ETag` header. On subsequent requests, pass the value as `If-None-Match`. If the dataset has not changed, the server returns `304 Not Modified` with no body — saving bandwidth and processing time.
+
+```typescript
+const etag = await db.getEtag(dataset); // stored from previous response
+
+const response = await fetch(
+  `https://homeservicedata.com/api/v1/sync/snapshot?dataset=${dataset}`,
+  {
+    headers: {
+      "x-api-key": "YOUR_API_KEY",
+      ...(etag ? { "If-None-Match": etag } : {}),
+    },
+  }
+);
+
+if (response.status === 304) {
+  console.log("No changes — skipping sync");
+  return;
+}
+
+const newEtag = response.headers.get("ETag");
+await db.setEtag(dataset, newEtag);
+```
+
+## API reference
+
+<CardGroup cols={2}>
+  <Card title="Sync Snapshot" icon="download" href="/api-reference/sync-snapshot">
+    Full parameter list and response schema for `/api/v1/sync/snapshot`.
+  </Card>
+  <Card title="Sync Changes" icon="refresh-cw" href="/api-reference/sync-changes">
+    Full parameter list and response schema for `/api/v1/sync/changes`.
+  </Card>
+</CardGroup>

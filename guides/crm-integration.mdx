@@ -1,0 +1,188 @@
+---
+title: "Push Home Service Data into CRM and Field Service Tools"
+sidebarTitle: "CRM Integration"
+description: "Sync source-verified finance eligibility, incentives, and equipment data into CRM platforms like ServiceTitan and Jobber to keep lead records accurate."
+---
+
+CRM platforms are only as useful as the data inside them. When a sales rep opens a lead in ServiceTitan, Jobber, Housecall Pro, or any field-service tool, they need current lender eligibility, available incentive programs, and verified equipment context — not a static note from last quarter. Home Service Data gives you two proven patterns for keeping your CRM records accurate without rebuilding your workflows from scratch.
+
+## Supported platforms
+
+Home Service Data is designed to work alongside the platforms your team already uses. Common integration targets include:
+
+- **Field service CRMs** — ServiceTitan, Jobber, Housecall Pro, Workiz, FieldPulse
+- **Solar workflow tools** — OpenSolar, Aurora Solar, Enerflo
+- **Roofing and estimating tools** — AccuLynx, Leap, EagleView, HOVER, CompanyCam, JobNimbus
+- **Construction management** — Buildertrend
+
+Any platform that accepts webhooks, has an API, or allows custom field population can be enriched with Home Service Data.
+
+## Integration patterns
+
+<Tabs>
+  <Tab title="Real-time lookup">
+
+    In the real-time pattern, you call Home Service Data when a lead's address or location is captured — typically in a CRM webhook, a form submission handler, or a lead creation trigger. This keeps your lookup fresh and avoids maintaining a local cache.
+
+    **Best for:** Platforms with webhook-based automations, small teams, or use cases where you query a handful of leads per hour.
+
+    When a new lead arrives, call `/api/v1/quote-context` with the lead's state, county, and the relevant trade vertical. Store the returned finance eligibility and incentive records as custom fields on the lead record.
+
+    ```typescript
+    import { createHsdClient } from "hsd-client-sdk";
+
+    const hsd = createHsdClient({
+      apiKey: process.env.HSD_API_KEY!,
+      baseUrl: "https://homeservicedata.com",
+    });
+
+    // Called from your CRM webhook handler when a lead is created
+    async function enrichLeadOnCreate(lead: {
+      state: string;
+      county: string;
+      trade: string;
+    }) {
+      const params = new URLSearchParams({
+        trade: lead.trade,
+        state: lead.state,
+        county: lead.county,
+      });
+
+      const response = await fetch(
+        `https://homeservicedata.com/api/v1/quote-context?${params}`,
+        {
+          headers: { "x-api-key": process.env.HSD_API_KEY! },
+        }
+      );
+
+      const { data, error } = await response.json();
+
+      if (error) throw new Error(error);
+
+      // Only surface quote-safe records to the CRM
+      const eligiblePrograms = data.finance.filter(
+        (p: { quote_safe: boolean }) => p.quote_safe === true
+      );
+      const activeIncentives = data.context.incentives.filter(
+        (i: { quote_safe: boolean }) => i.quote_safe === true
+      );
+
+      return {
+        eligiblePrograms,
+        activeIncentives,
+        climateContext: data.context.climate,
+      };
+    }
+    ```
+
+  </Tab>
+  <Tab title="Background sync + local cache">
+
+    In the background sync pattern, you seed your own database table with a full dataset snapshot, then poll for changes on a schedule. Your CRM integration queries your local table instead of calling Home Service Data on every lead touch — dramatically reducing latency and API usage.
+
+    **Best for:** High-volume platforms, multi-rep teams, and use cases where the same dataset is queried many times per day.
+
+    ```typescript
+    import { createHsdClient } from "hsd-client-sdk";
+    import type { HsdDatasetKey } from "hsd-client-sdk";
+
+    const hsd = createHsdClient({
+      apiKey: process.env.HSD_API_KEY!,
+      baseUrl: "https://homeservicedata.com",
+    });
+
+    // Step 1 — Seed your database from a full snapshot
+    async function seedFromSnapshot(dataset: HsdDatasetKey) {
+      const snapshot = await hsd.getSnapshot(dataset, {
+        trade: "hvac",
+        quoteSafeOnly: true,
+      });
+
+      // snapshot.records — all current records
+      // snapshot.sync.cursor — store this for delta polling
+      await db.upsertMany("hsd_cache", snapshot.records);
+      await db.setCursor(dataset, snapshot.sync.cursor);
+
+      console.log(`Seeded ${snapshot.records.length} records for ${dataset}`);
+    }
+
+    // Step 2 — Poll for changes using the stored cursor
+    async function applyChanges(dataset: HsdDatasetKey) {
+      const cursor = await db.getCursor(dataset);
+      if (!cursor) {
+        return seedFromSnapshot(dataset);
+      }
+
+      const delta = await hsd.getChanges(dataset, cursor);
+
+      for (const change of delta.changes) {
+        if (change.operation === "delete") {
+          await db.delete("hsd_cache", change.record_id);
+        } else {
+          // upsert and supersede both write the latest payload
+          await db.upsert("hsd_cache", change.record_id, change.payload);
+        }
+      }
+
+      // Always persist the updated cursor
+      await db.setCursor(dataset, delta.latest_cursor);
+
+      console.log(`Applied ${delta.changes.length} changes for ${dataset}`);
+    }
+    ```
+
+    Schedule `applyChanges` on a cron (every 15–60 minutes is typical). Your CRM integration then reads from your local `hsd_cache` table with no external API call in the critical path.
+
+  </Tab>
+</Tabs>
+
+## Keeping CRM data fresh with webhooks
+
+Even with a scheduled sync, dataset updates can happen between polling intervals. Home Service Data publishes `dataset.version.published` webhook events whenever a dataset is updated. Configure a webhook endpoint in the Dashboard to receive these events and trigger an immediate delta pull — so your CRM records are updated within seconds of a new lender program or incentive change going live.
+
+See the [Webhooks guide](/guides/webhooks) for the full payload shape and a handler example.
+
+## Mapping data to CRM fields
+
+Different CRM platforms expose different extension points. Here are the most common mapping targets:
+
+<CardGroup cols={2}>
+  <Card title="Lead custom fields" icon="user">
+    Map `finance_eligibility` records and `incentives` to lead-level custom fields so reps see eligibility context as soon as a lead is created.
+  </Card>
+  <Card title="Estimate line items" icon="list">
+    Map `finance` fee records (interest rate, term, dealer fee) to estimate or proposal line items in quoting workflows.
+  </Card>
+  <Card title="Job notes" icon="file-text">
+    Append `context.permits` and `context.climate` summaries to job notes so technicians arrive informed.
+  </Card>
+  <Card title="Product catalog" icon="database">
+    Sync `equipment_pricing` records into your CRM's product catalog so reps can select verified SKUs when building proposals.
+  </Card>
+</CardGroup>
+
+## Dataset keys for CRM use cases
+
+The following dataset keys are most relevant for CRM enrichment:
+
+| Dataset key | What it contains | CRM use |
+|---|---|---|
+| `finance_eligibility` | Lender eligibility by state, county, and measure | Qualify leads for financing before first contact |
+| `finance_fees` | Verified dealer fees and program rates | Populate accurate finance line items in estimates |
+| `hvac_incentives` | Incentive programs with eligibility rules | Show available rebates on HVAC leads |
+| `equipment_pricing` | Price observations with confidence ratings | Cross-reference against your own pricing model |
+
+<Tip>
+Create a dedicated API key for each CRM integration in the Dashboard. This lets you track usage, set per-key rate limits, and revoke access to a single integration without affecting other systems.
+</Tip>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Sync Integration" icon="refresh-cw" href="/guides/sync-integration">
+    Step-by-step guide to seeding and maintaining a local database mirror of any HSD dataset.
+  </Card>
+  <Card title="Webhooks" icon="bell" href="/guides/webhooks">
+    Receive instant notifications when a dataset is updated so your CRM data never lags.
+  </Card>
+</CardGroup>

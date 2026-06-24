@@ -1,0 +1,217 @@
+---
+title: "GET /api/v1/sync/snapshot — Full Dataset Snapshot"
+sidebarTitle: "Sync Snapshot"
+description: "Download a complete, versioned snapshot of any Home Service Data dataset and receive a cursor to begin incremental sync with the changes endpoint."
+---
+
+The `/api/v1/sync/snapshot` endpoint downloads every current record in a named dataset in a single paginated response. Each snapshot response includes a **version object** with a `cursor` string that acts as a bookmark — after loading the initial snapshot, pass that cursor to [`/api/v1/sync/changes`](/api-reference/sync-changes) to receive only the records that changed since your last sync. This two-step pattern (snapshot once, then poll changes) keeps your CRM or quoting database up to date without re-downloading entire datasets on every run.
+
+The endpoint supports **conditional GET** via the `ETag` / `If-None-Match` mechanism. If nothing has changed since your last snapshot, the API returns `304 Not Modified` with an empty body, saving both bandwidth and API quota.
+
+## Request
+
+```
+GET https://homeservicedata.com/api/v1/sync/snapshot
+```
+
+### Authentication
+
+All requests must include your API key in the `x-api-key` header. The required access tier varies by dataset; most datasets require **production** tier.
+
+### Query Parameters
+
+<ParamField query="dataset" type="string" required>
+  The dataset to snapshot. Must be one of the following keys:
+
+  | Key | Description |
+  |-----|-------------|
+  | `finance_fees` | Dealer-fee and finance-program rows used by quote tools |
+  | `finance_products` | Finance product catalog |
+  | `finance_eligibility` | Eligibility rules by trade, state, county, and measure |
+  | `equipment_pricing` | Equipment catalog with pricing |
+  | `utility_territory` | Utility territory boundary data |
+  | `electricity_rates` | Electricity rate data by territory |
+  | `hvac_incentives` | HVAC-specific rebate and incentive programs |
+  | `hvac_climate` | HVAC climate context by county |
+  | `hvac_labor` | HVAC labor adder records |
+  | `hvac_ahri_matches` | AHRI-certified HVAC system match records |
+</ParamField>
+
+<ParamField query="trade" type="string">
+  Optional trade filter. When provided, only records for that trade category are returned. Must be one of `solar`, `hvac`, `roofing`, `plumbing`, or `electrical`. Not all datasets carry trade-scoped records — for trade-agnostic datasets the parameter is accepted but has no filtering effect.
+</ParamField>
+
+<ParamField query="limit" type="integer">
+  Maximum number of records to return. The ceiling varies by dataset (up to `5000` for high-volume datasets like `finance_fees`). When omitted, the dataset's default maximum is used. Lowering the limit is useful during development or when testing incremental sync without pulling full production volumes.
+</ParamField>
+
+---
+
+### Conditional GET (ETag)
+
+Every `200` response includes an `ETag` response header. Store that value and include it as `If-None-Match` on your next request. If the dataset version and limit parameters have not changed, the API returns `304 Not Modified` with no body, and no quota is charged for the data transfer.
+
+```bash
+# First request — no ETag yet
+curl https://homeservicedata.com/api/v1/sync/snapshot?dataset=finance_fees \
+  -H "x-api-key: YOUR_API_KEY" \
+  -i
+
+# Subsequent request — send stored ETag
+curl https://homeservicedata.com/api/v1/sync/snapshot?dataset=finance_fees \
+  -H "x-api-key: YOUR_API_KEY" \
+  -H 'If-None-Match: "v42:finance_fees:all:5000"' \
+  -i
+# → HTTP 304 Not Modified (no body, no data charge)
+```
+
+---
+
+## Response
+
+<ResponseField name="data" type="object">
+  Top-level `data` envelope containing the snapshot payload.
+
+  <Expandable title="data">
+    <ResponseField name="dataset" type="object">
+      Metadata describing the dataset that was snapshotted.
+
+      <Expandable title="dataset">
+        <ResponseField name="key" type="string">Dataset key (e.g. `finance_fees`).</ResponseField>
+        <ResponseField name="title" type="string">Human-readable dataset title (e.g. `"Finance Fee Records"`).</ResponseField>
+        <ResponseField name="endpoint" type="string">The default REST endpoint for this dataset (e.g. `/api/v1/finance/fees`).</ResponseField>
+        <ResponseField name="source" type="string">Dataset source identifier for this snapshot.</ResponseField>
+        <ResponseField name="trade" type="string">Trade category filter applied, or `"all"` when no trade filter was used.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="version" type="object | null">
+      The current published version of the dataset. `null` if no version has been published yet.
+
+      <Expandable title="version">
+        <ResponseField name="id" type="string">UUID of this dataset version.</ResponseField>
+        <ResponseField name="number" type="integer">Monotonically increasing version number.</ResponseField>
+        <ResponseField name="cursor" type="string | null">
+          Opaque cursor string representing this version. Pass this value as `since` to [`/api/v1/sync/changes`](/api-reference/sync-changes) to receive only records that changed after this snapshot.
+        </ResponseField>
+        <ResponseField name="published_at" type="string">ISO 8601 timestamp of when this version was published.</ResponseField>
+        <ResponseField name="row_count" type="integer">Total number of rows in this version of the dataset.</ResponseField>
+        <ResponseField name="quote_safe_count" type="integer">Number of rows flagged as `quote_safe: true` in this version.</ResponseField>
+        <ResponseField name="change_summary" type="object">Free-form object describing what changed in this version (upserts, deletes, record counts by trade, etc.).</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="records" type="array">
+      Array of dataset records. Schema varies by dataset key. Each record typically includes `quote_safe`, `trade_category`, and provenance fields alongside the domain-specific payload.
+    </ResponseField>
+
+    <ResponseField name="sync" type="object">
+      Sync control metadata for integrating this snapshot into an incremental pipeline.
+
+      <Expandable title="sync">
+        <ResponseField name="mode" type="string">Always `"snapshot"` for this endpoint.</ResponseField>
+        <ResponseField name="etag" type="string">
+          ETag value. Store this and send it as `If-None-Match` on your next snapshot request to detect whether anything has changed.
+        </ResponseField>
+        <ResponseField name="cursor" type="string | null">
+          Same value as `version.cursor`. Store this as your starting bookmark for incremental sync.
+        </ResponseField>
+        <ResponseField name="changes_url" type="string | null">
+          Pre-built URL for the first incremental changes request using this snapshot's cursor. `null` if no cursor is available. Example: `/api/v1/sync/changes?dataset=finance_fees&since=v42%3A...`
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Examples
+
+<CodeGroup>
+```bash cURL — finance fees snapshot
+curl -G https://homeservicedata.com/api/v1/sync/snapshot \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "dataset=finance_fees"
+```
+
+```bash cURL — HVAC climate snapshot (trade-filtered)
+curl -G https://homeservicedata.com/api/v1/sync/snapshot \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "dataset=hvac_climate" \
+  --data-urlencode "trade=hvac" \
+  --data-urlencode "limit=200"
+```
+
+```bash cURL — conditional GET
+curl -G https://homeservicedata.com/api/v1/sync/snapshot \
+  -H "x-api-key: YOUR_API_KEY" \
+  -H 'If-None-Match: "v42:finance_fees:all:5000"' \
+  --data-urlencode "dataset=finance_fees"
+```
+</CodeGroup>
+
+### Response — 200 OK
+
+```json
+{
+  "data": {
+    "dataset": {
+      "key": "finance_fees",
+      "title": "Finance Fee Records",
+      "endpoint": "/api/v1/finance/fees",
+      "source": "current_finance_fee_records",
+      "trade": "all"
+    },
+    "version": {
+      "id": "018f3a2b-1c4d-7e8f-9012-3b4c5d6e7f80",
+      "number": 42,
+      "cursor": "v42:finance_fees:all",
+      "published_at": "2025-01-15T18:30:00.000Z",
+      "row_count": 1248,
+      "quote_safe_count": 1201,
+      "change_summary": {
+        "upserted": 14,
+        "deleted": 2,
+        "unchanged": 1232
+      }
+    },
+    "records": [
+      {
+        "finance_program_version_id": "018f3a2b-0000-7e8f-0001-3b4c5d6e7f01",
+        "trade_category": "solar",
+        "financier_name": "GoodLeap",
+        "financier_slug": "goodleap",
+        "product_title": "GoodLeap 25-Year 5.99%",
+        "quote_safe": true
+        /* additional fields vary by dataset */
+      }
+    ],
+    "sync": {
+      "mode": "snapshot",
+      "etag": "\"v42:finance_fees:all:5000\"",
+      "cursor": "v42:finance_fees:all",
+      "changes_url": "/api/v1/sync/changes?dataset=finance_fees&since=v42%3Afinance_fees%3Aall"
+    }
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+### Response — 304 Not Modified
+
+When `If-None-Match` matches the current ETag, the API returns an empty `304` response with no body.
+
+```
+HTTP/1.1 304 Not Modified
+ETag: "v42:finance_fees:all:5000"
+X-HSD-Dataset: finance_fees
+X-HSD-Cursor: v42:finance_fees:all
+```
+
+---
+
+## Next Steps
+
+Once you have a snapshot cursor, use [Sync Changes](/api-reference/sync-changes) to poll for incremental updates without re-downloading the full dataset.

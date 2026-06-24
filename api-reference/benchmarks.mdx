@@ -1,0 +1,216 @@
+---
+title: "GET /api/v1/benchmarks — Market Pricing Benchmarks"
+sidebarTitle: "Benchmarks"
+description: "Retrieve statistical distributions — avg, median, p25, p75, min, max, and stddev — for dealer fees, inverter costs, and interest rates."
+---
+
+The `/api/v1/benchmarks` endpoint exposes a statistical summary of key pricing and financing metrics aggregated across the Home Service Data catalog. For every supported metric you receive a full distribution: average, median, 25th and 75th percentiles, minimum, maximum, standard deviation, and sample size. Responses can be narrowed with metric-specific filters such as `manufacturer`, `payment_type`, `term_months`, or `financier`, letting your quoting tool or CRM surface hyper-relevant market context rather than broad averages. Access to each metric is governed by the dataset scope associated with your API key.
+
+## Endpoint
+
+```
+GET https://homeservicedata.com/api/v1/benchmarks
+```
+
+## Authentication
+
+All requests must include a valid API key in the `x-api-key` header. Each metric maps to a specific dataset scope; your key must have the corresponding dataset enabled.
+
+<ParamField header="x-api-key" type="string" required>
+  Your secret API key. Generate or rotate keys from the dashboard under **Settings → API Keys**.
+</ParamField>
+
+<Warning>
+  Dataset access is enforced per metric. Requesting a metric your key is not provisioned for returns a `403 Forbidden` response. Contact your account manager to enable additional datasets.
+</Warning>
+
+## Query Parameters
+
+<ParamField query="metric" type="string" required>
+  The metric key to compute benchmarks for. Must be one of the registered keys listed in the table below. An error is returned if this parameter is missing or if the key is not recognized.
+
+  | Key | Label | Unit | Dataset Scope |
+  |---|---|---|---|
+  | `dealer_fee` | Dealer fee | `percent` | financing |
+  | `inverter_base_cost` | Inverter cost | `currency` | hardware |
+  | `inverter_price_per_watt` | Inverter $/watt add | `currency` | hardware |
+  | `interest_rate` | Rate | `percent` | financing |
+</ParamField>
+
+### Metric-Specific Filter Parameters
+
+The following optional filters are accepted depending on which `metric` you request. Unrecognized filter keys for a given metric are silently ignored.
+
+#### `dealer_fee` filters
+
+<ParamField query="payment_type" type="string">
+  Restrict results to a single payment type. Accepted values: `loan`, `lease`, `ppa`, `cash`.
+</ParamField>
+
+<ParamField query="term_months" type="number">
+  Restrict results to a specific loan term, expressed as an integer number of months (e.g. `120`, `180`, `240`).
+</ParamField>
+
+<ParamField query="financier" type="string">
+  Restrict results to a specific lender by its internal key, e.g. `"goodleap"` or `"sunlight"`.
+</ParamField>
+
+#### `inverter_base_cost` filters
+
+<ParamField query="manufacturer" type="string">
+  Restrict benchmark to a single inverter brand, e.g. `"Enphase"` or `"SolarEdge"`.
+</ParamField>
+
+<ParamField query="is_archived" type="boolean">
+  When `true`, includes archived (discontinued) inverter products in the calculation. Defaults to excluding archived records if omitted.
+</ParamField>
+
+#### `inverter_price_per_watt` filters
+
+<ParamField query="manufacturer" type="string">
+  Restrict the per-watt benchmark to inverters from a specific manufacturer.
+</ParamField>
+
+#### `interest_rate` filters
+
+<ParamField query="payment_type" type="string">
+  Restrict results to a single payment type. Accepted values: `loan`, `lease`, `ppa`, `cash`.
+</ParamField>
+
+<ParamField query="term_months" type="number">
+  Restrict results to a specific loan term in months.
+</ParamField>
+
+## Response Fields
+
+<ResponseField name="metric" type="string">
+  The metric key that was queried, echoed back in the response for verification, e.g. `"dealer_fee"`.
+</ResponseField>
+
+<ResponseField name="label" type="string">
+  The human-readable display name for the metric as defined in the benchmark registry, e.g. `"Dealer fee"`.
+</ResponseField>
+
+<ResponseField name="unit" type="string">
+  Formatting hint for the statistical values. One of `"percent"`, `"currency"`, or `"number"`. Use this field to render values correctly in your UI (e.g. prefix `$` for `currency`, append `%` for `percent`).
+</ResponseField>
+
+<ResponseField name="filters" type="object | null">
+  An object containing the filter key-value pairs that were applied to the computation, or `null` if no filters were provided. Only filters recognized by the metric are included.
+</ResponseField>
+
+<ResponseField name="avg" type="number | null">
+  Mean (arithmetic average) of all matching records. `null` if no data is available for the filter combination.
+</ResponseField>
+
+<ResponseField name="median" type="number | null">
+  50th-percentile value. More robust than the mean in the presence of outliers.
+</ResponseField>
+
+<ResponseField name="min" type="number | null">
+  Lowest observed value across all matching records.
+</ResponseField>
+
+<ResponseField name="max" type="number | null">
+  Highest observed value across all matching records.
+</ResponseField>
+
+<ResponseField name="stddev" type="number | null">
+  Population standard deviation, indicating spread around the mean. A higher value signals greater variability in the dataset.
+</ResponseField>
+
+<ResponseField name="p25" type="number | null">
+  25th percentile (first quartile). 25% of records fall at or below this value.
+</ResponseField>
+
+<ResponseField name="p75" type="number | null">
+  75th percentile (third quartile). 75% of records fall at or below this value. The interquartile range (`p75 − p25`) is a useful spread metric that excludes extreme outliers.
+</ResponseField>
+
+<ResponseField name="sample_size" type="integer">
+  Number of records included in the computation after all filters were applied. A value of `0` means no matching data was found; all statistical fields will be `null`.
+</ResponseField>
+
+<Note>
+  All statistical computations are performed against the filtered dataset at query time. Results reflect the current state of the catalog and are not cached.
+</Note>
+
+## Example Requests
+
+<CodeGroup>
+```bash dealer_fee — all payment types
+curl "https://homeservicedata.com/api/v1/benchmarks?metric=dealer_fee" \
+  -H "x-api-key: YOUR_API_KEY"
+```
+
+```bash dealer_fee — loan only, 240-month term
+curl "https://homeservicedata.com/api/v1/benchmarks?metric=dealer_fee&payment_type=loan&term_months=240" \
+  -H "x-api-key: YOUR_API_KEY"
+```
+
+```bash inverter_base_cost — Enphase only
+curl "https://homeservicedata.com/api/v1/benchmarks?metric=inverter_base_cost&manufacturer=Enphase" \
+  -H "x-api-key: YOUR_API_KEY"
+```
+
+```bash inverter_price_per_watt — all manufacturers
+curl "https://homeservicedata.com/api/v1/benchmarks?metric=inverter_price_per_watt" \
+  -H "x-api-key: YOUR_API_KEY"
+```
+
+```bash interest_rate — lease products, 60-month term
+curl "https://homeservicedata.com/api/v1/benchmarks?metric=interest_rate&payment_type=lease&term_months=60" \
+  -H "x-api-key: YOUR_API_KEY"
+```
+</CodeGroup>
+
+## Response Example
+
+The following shows a full response for `metric=dealer_fee` filtered to `payment_type=loan` and `term_months=240`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "metric": "dealer_fee",
+    "label": "Dealer fee",
+    "unit": "percent",
+    "filters": {
+      "payment_type": "loan",
+      "term_months": "240"
+    },
+    "avg": 28.74,
+    "median": 28.00,
+    "min": 18.50,
+    "max": 39.99,
+    "stddev": 4.31,
+    "p25": 25.50,
+    "p75": 31.25,
+    "sample_size": 312
+  }
+}
+```
+
+<Tip>
+  The `p25`–`p75` interquartile range is the most reliable spread signal for pricing benchmarks. Outlier dealer fees at `min` and `max` often reflect promotional or corrective entries rather than typical market rates.
+</Tip>
+
+## Dataset Access by Metric
+
+Each metric requires a specific dataset scope to be enabled on your API key. Requesting a metric without the corresponding access returns a `403 Forbidden` response.
+
+| Metric | Required Dataset |
+|---|---|
+| `dealer_fee` | financing |
+| `inverter_base_cost` | hardware |
+| `inverter_price_per_watt` | hardware |
+| `interest_rate` | financing |
+
+## Error Responses
+
+| HTTP Status | Cause |
+|---|---|
+| `400 Bad Request` | `metric` parameter is missing, or the supplied key is not a recognized benchmark metric. The error message lists all valid metric keys. |
+| `401 Unauthorized` | Missing or invalid `x-api-key` header. |
+| `403 Forbidden` | Your API key does not have access to the dataset required by the requested metric. |
+| `500 Internal Server Error` | Unexpected server-side error — contact support if the issue persists. |

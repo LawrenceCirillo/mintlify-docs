@@ -1,0 +1,153 @@
+---
+title: "GET /api/v1/context/hvac/pricing — Equipment Prices"
+sidebarTitle: "HVAC Pricing"
+description: "Retrieve published HVAC equipment price observations by manufacturer, model, and source kind — used to benchmark quotes and populate cost assumptions."
+---
+
+The HVAC pricing context endpoint surfaces observed market prices for HVAC equipment sourced from distributor pages, public benchmarks, and third-party price feeds. Each record carries a `quote_safe` flag that tells you whether the observation meets the verification bar for use in customer-facing quotes. Records with `quote_safe: false` are still useful for internal cost modeling, competitive benchmarking, and range estimation.
+
+**Endpoint**
+
+```
+GET https://homeservicedata.com/api/v1/context/hvac/pricing
+```
+
+## Query Parameters
+
+<ParamField query="manufacturer" type="string">
+  Filter by manufacturer name. Partial match, case-insensitive (e.g., `Carrier`, `Lennox`).
+</ParamField>
+
+<ParamField query="model" type="string">
+  Filter by model number. Partial match, case-insensitive.
+</ParamField>
+
+<ParamField query="price_kind" type="string">
+  Narrow to a specific price observation type. Common values: `msrp`, `distributor_list`, `street_price`, `installed_benchmark`.
+</ParamField>
+
+<ParamField query="source_kind" type="string">
+  Filter by provenance category. Common values: `public_market_observation`, `third_party`, `inferred_model`, `public_benchmark`.
+</ParamField>
+
+<ParamField query="quote_safe" type="boolean">
+  When `true`, returns only records cleared for use in customer-facing quotes. Omit to return all records.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="100">
+  Maximum number of records to return. Capped at `250`.
+</ParamField>
+
+<Note>
+  All results are scoped to `trade_category = hvac`. To retrieve pricing for other trades use the equipment pricing endpoint.
+</Note>
+
+## Response Fields
+
+<ResponseField name="records" type="array">
+  Array of price observation objects.
+
+  <Expandable title="Record fields">
+    <ResponseField name="id" type="string">Unique record identifier.</ResponseField>
+    <ResponseField name="source_document_id" type="string">Internal reference to the source document that produced this record.</ResponseField>
+    <ResponseField name="trade_category" type="string">Always `hvac` for this endpoint.</ResponseField>
+    <ResponseField name="equipment_category" type="string">High-level equipment category (e.g., `split_system_ac`, `heat_pump`, `air_handler`).</ResponseField>
+    <ResponseField name="manufacturer" type="string">Equipment manufacturer name.</ResponseField>
+    <ResponseField name="model_number" type="string">Manufacturer model number.</ResponseField>
+    <ResponseField name="matched_sku" type="string | null">Normalized SKU if a canonical match was resolved.</ResponseField>
+    <ResponseField name="product_type" type="string | null">Descriptive product type label.</ResponseField>
+    <ResponseField name="tonnage" type="number | null">Rated cooling capacity in tons.</ResponseField>
+    <ResponseField name="seer2_rating" type="number | null">SEER2 efficiency rating.</ResponseField>
+    <ResponseField name="hspf2_rating" type="number | null">HSPF2 heating efficiency rating.</ResponseField>
+    <ResponseField name="refrigerant_type" type="string | null">Refrigerant designation (e.g., `R-410A`, `R-32`).</ResponseField>
+    <ResponseField name="price_kind" type="string">Type of price observation (e.g., `msrp`, `street_price`).</ResponseField>
+    <ResponseField name="observed_price" type="number | null">Point-estimate observed price in USD.</ResponseField>
+    <ResponseField name="observed_price_low" type="number | null">Low end of an observed price range, if applicable.</ResponseField>
+    <ResponseField name="observed_price_high" type="number | null">High end of an observed price range, if applicable.</ResponseField>
+    <ResponseField name="currency" type="string">Currency code. Always `USD`.</ResponseField>
+    <ResponseField name="source_name" type="string | null">Human-readable name of the data source.</ResponseField>
+    <ResponseField name="source_url" type="string | null">Direct URL to the source page or document.</ResponseField>
+    <ResponseField name="source_title" type="string | null">Title of the source document.</ResponseField>
+    <ResponseField name="source_kind" type="string">Provenance category of this observation.</ResponseField>
+    <ResponseField name="observed_at" type="string | null">ISO 8601 timestamp when the price was observed at the source.</ResponseField>
+    <ResponseField name="captured_at" type="string">ISO 8601 timestamp when the record was ingested.</ResponseField>
+    <ResponseField name="quote_safe" type="boolean">Whether this record meets the verification threshold for customer-facing use.</ResponseField>
+    <ResponseField name="confidence" type="string | null">Confidence tier: `high`, `medium`, or `low`.</ResponseField>
+    <ResponseField name="validation_warnings" type="array | null">List of validation warning strings attached during ingest.</ResponseField>
+    <ResponseField name="metadata" type="object | null">Additional source-specific key-value pairs.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="coverage" type="object">
+  Summary of the query result set.
+
+  <Expandable title="Coverage fields">
+    <ResponseField name="returned" type="integer">Number of records returned.</ResponseField>
+    <ResponseField name="source" type="string">Dataset identifier for this endpoint's price observation records.</ResponseField>
+    <ResponseField name="quote_safe_rule" type="string">Description of which record types are held back from `quote_safe: true`.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Warning>
+  `third_party`, `public_market_observation`, `inferred_model`, and `public_benchmark` source kinds are always returned with `quote_safe: false` regardless of other conditions. Do not use those records as authoritative pricing in customer quotes without independent verification.
+</Warning>
+
+## Example Request
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://homeservicedata.com/api/v1/context/hvac/pricing \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "manufacturer=Carrier" \
+  --data-urlencode "quote_safe=true" \
+  --data-urlencode "limit=5"
+```
+
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "records": [
+      {
+        "id": "obs_01hzk9a2bc3de4fg5hi6jk7lmn",
+        "source_document_id": "doc_01hzk9a2bc3de4fg5hi6jk7aaa",
+        "trade_category": "hvac",
+        "equipment_category": "split_system_ac",
+        "manufacturer": "Carrier",
+        "model_number": "24ACC636A003",
+        "matched_sku": "carrier-24acc636a003",
+        "product_type": "Central Air Conditioner",
+        "tonnage": 3,
+        "seer2_rating": 15.2,
+        "hspf2_rating": null,
+        "refrigerant_type": "R-410A",
+        "price_kind": "distributor_list",
+        "observed_price": 1485.00,
+        "observed_price_low": null,
+        "observed_price_high": null,
+        "currency": "USD",
+        "source_name": "Carrier Authorized Distributor Portal",
+        "source_url": "https://example-distributor.com/carrier",
+        "source_title": "Carrier 2024 Price Sheet",
+        "source_kind": "distributor_list",
+        "observed_at": "2024-11-01T00:00:00Z",
+        "captured_at": "2024-11-15T10:32:00Z",
+        "quote_safe": true,
+        "confidence": "high",
+        "validation_warnings": [],
+        "metadata": null
+      }
+    ],
+    "coverage": {
+      "returned": 1,
+      "source": "current_equipment_price_observations",
+      "quote_safe_rule": "third_party, public_market_observation, inferred_model, and public benchmark rows return as context only"
+    }
+  }
+}
+```

@@ -1,0 +1,215 @@
+---
+title: "GET /api/v1/context/permits — Permit Requirements"
+sidebarTitle: "Permits"
+description: "Query permit requirements, inspection rules, and fee schedules by trade, state, county, and city from official jurisdiction portals with quote-safe flags."
+---
+
+The permits context endpoint returns permit and code-compliance records for home-service trades across U.S. jurisdictions. Each record describes whether a permit is required, what inspections and documents are needed, and any associated fee structure. Data is sourced from official jurisdiction portals and AHJ websites. Records backed by verified, deterministic source data are marked `quote_safe: true`; records with ambiguous requirements, estimated fees, or unresolved code questions carry `quote_safe: false` and should be treated as directional context only.
+
+**Endpoint**
+
+```
+GET https://homeservicedata.com/api/v1/context/permits
+```
+
+## Query Parameters
+
+<ParamField query="trade" type="string" default="hvac">
+  Trade vertical to filter by. One of: `hvac`, `solar`, `roofing`, `plumbing`, `electrical`.
+</ParamField>
+
+<ParamField query="state" type="string">
+  Two-letter state code (e.g., `FL`, `AZ`). Case-insensitive.
+</ParamField>
+
+<ParamField query="county" type="string">
+  County name. Partial match, case-insensitive.
+</ParamField>
+
+<ParamField query="city" type="string">
+  City name. Partial match against the jurisdiction's city. Case-insensitive.
+</ParamField>
+
+<ParamField query="quote_safe" type="boolean">
+  When `true`, returns only records verified for customer-facing quote use.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="100">
+  Maximum number of records to return. Capped at `500`.
+</ParamField>
+
+## Response Fields
+
+<ResponseField name="records" type="array">
+  Array of permit context objects.
+
+  <Expandable title="Record fields">
+    <ResponseField name="record_id" type="string">Unique record identifier.</ResponseField>
+
+    <ResponseField name="jurisdiction" type="object">
+      The authority having jurisdiction (AHJ) for this record.
+      <Expandable title="jurisdiction fields">
+        <ResponseField name="id" type="string">Internal jurisdiction authority ID.</ResponseField>
+        <ResponseField name="slug" type="string | null">Normalized jurisdiction slug.</ResponseField>
+        <ResponseField name="authority_name" type="string | null">Name of the AHJ (e.g., `City of Phoenix Building Department`).</ResponseField>
+        <ResponseField name="jurisdiction_type" type="string | null">Type: `city`, `county`, `state`, or `special_district`.</ResponseField>
+        <ResponseField name="state_code" type="string | null">State code where this jurisdiction operates.</ResponseField>
+        <ResponseField name="county_name" type="string | null">County name for this jurisdiction.</ResponseField>
+        <ResponseField name="county_fips" type="string | null">5-digit county FIPS code.</ResponseField>
+        <ResponseField name="city_name" type="string | null">City name for this jurisdiction.</ResponseField>
+        <ResponseField name="website_url" type="string | null">Jurisdiction's official website.</ResponseField>
+        <ResponseField name="permit_portal_url" type="string | null">Direct link to the jurisdiction's permit portal.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="trade" type="string">Trade this permit record applies to.</ResponseField>
+    <ResponseField name="permit_type" type="string | null">Permit type label (e.g., `mechanical`, `electrical`, `building`).</ResponseField>
+
+    <ResponseField name="requirements" type="object">
+      Permit and inspection requirement flags.
+      <Expandable title="requirements fields">
+        <ResponseField name="permit_required" type="boolean | null">Whether a permit is required for this trade/work type.</ResponseField>
+        <ResponseField name="inspection_required" type="boolean | null">Whether a post-installation inspection is required.</ResponseField>
+        <ResponseField name="licensed_contractor_required" type="boolean | null">Whether a licensed contractor must pull the permit.</ResponseField>
+        <ResponseField name="registered_contractor_required" type="boolean | null">Whether contractor registration with the jurisdiction is required.</ResponseField>
+        <ResponseField name="preapproval_required" type="boolean | null">Whether pre-approval or plan review is required before work begins.</ResponseField>
+        <ResponseField name="required_documents" type="array">List of documents required for permit submission (e.g., `equipment_spec_sheet`, `load_calculation`).</ResponseField>
+        <ResponseField name="unresolved_requirements" type="array">Conditions that are ambiguous or not yet verified.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="fees" type="object">
+      Permit fee information.
+      <Expandable title="fees fields">
+        <ResponseField name="amount_type" type="string | null">Fee structure: `flat`, `valuation_based`, `tiered`, `exempt`, or `unknown`.</ResponseField>
+        <ResponseField name="fee_low" type="number | null">Low end of the expected permit fee in USD.</ResponseField>
+        <ResponseField name="fee_high" type="number | null">High end of the expected permit fee in USD.</ResponseField>
+        <ResponseField name="formula" type="string | null">Fee calculation formula if the jurisdiction uses a valuation-based or tiered method.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="code" type="object">
+      Building/energy code context.
+      <Expandable title="code fields">
+        <ResponseField name="basis" type="string | null">Code basis adopted (e.g., `IRC_2021`, `IECC_2021`).</ResponseField>
+        <ResponseField name="cycle" type="string | null">Code cycle year or label.</ResponseField>
+        <ResponseField name="status" type="string | null">Adoption status: `adopted`, `pending`, `partial`, `unknown`.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="quote_safe" type="boolean">Whether this record is cleared for use in customer-facing quotes.</ResponseField>
+    <ResponseField name="confidence" type="string | null">Confidence tier: `high`, `medium`, or `low`.</ResponseField>
+
+    <ResponseField name="provenance" type="object">
+      Source traceability.
+      <Expandable title="provenance fields">
+        <ResponseField name="source_document_id" type="string | null">Internal source document reference.</ResponseField>
+        <ResponseField name="source_url" type="string | null">URL to the authoritative permit information page.</ResponseField>
+        <ResponseField name="last_verified_at" type="string | null">ISO 8601 timestamp of last verification.</ResponseField>
+        <ResponseField name="trust_basis" type="string">Always `permit_code_context`.</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="coverage" type="object">
+  Query summary metadata.
+  <Expandable title="Coverage fields">
+    <ResponseField name="trade" type="string">Trade filter applied.</ResponseField>
+    <ResponseField name="state" type="string | null">State filter applied.</ResponseField>
+    <ResponseField name="county" type="string | null">County filter applied.</ResponseField>
+    <ResponseField name="city" type="string | null">City filter applied.</ResponseField>
+    <ResponseField name="records_returned" type="integer">Number of records returned.</ResponseField>
+    <ResponseField name="quote_safe_only" type="boolean">Whether results were restricted to quote-safe records.</ResponseField>
+    <ResponseField name="trust_basis" type="string">Description of the trust model for this dataset.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Warning>
+  Permit requirements and fees change frequently. Always verify current fee schedules directly with the AHJ before including permit costs in a customer contract. Records with `quote_safe: false` or non-empty `unresolved_requirements` arrays require manual verification before use in a binding quote.
+</Warning>
+
+<Tip>
+  Filter by `quote_safe=true` when populating permit fee line items in a proposal. Use `quote_safe=false` records for internal awareness of jurisdictions that require additional research before closing a job.
+</Tip>
+
+## Example Request
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://homeservicedata.com/api/v1/context/permits \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "trade=hvac" \
+  --data-urlencode "state=FL" \
+  --data-urlencode "city=Orlando" \
+  --data-urlencode "quote_safe=true"
+```
+
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "records": [
+      {
+        "record_id": "pmt_01hzka1bc2de3fg4hi5jk6yzab",
+        "jurisdiction": {
+          "id": "jur_01hzka1bc2de3fg4hi5abcde",
+          "slug": "city-of-orlando-fl",
+          "authority_name": "City of Orlando Building Division",
+          "jurisdiction_type": "city",
+          "state_code": "FL",
+          "county_name": "Orange",
+          "county_fips": "12095",
+          "city_name": "Orlando",
+          "website_url": "https://www.orlando.gov/Building",
+          "permit_portal_url": "https://permits.orlando.gov"
+        },
+        "trade": "hvac",
+        "permit_type": "mechanical",
+        "requirements": {
+          "permit_required": true,
+          "inspection_required": true,
+          "licensed_contractor_required": true,
+          "registered_contractor_required": false,
+          "preapproval_required": false,
+          "required_documents": ["equipment_spec_sheet", "manual_j_summary"],
+          "unresolved_requirements": []
+        },
+        "fees": {
+          "amount_type": "flat",
+          "fee_low": 85.00,
+          "fee_high": 125.00,
+          "formula": null
+        },
+        "code": {
+          "basis": "FBC_2023",
+          "cycle": "2023",
+          "status": "adopted"
+        },
+        "quote_safe": true,
+        "confidence": "high",
+        "provenance": {
+          "source_document_id": "doc_01hzka1bc2de3fg4hi5jk6orl",
+          "source_url": "https://www.orlando.gov/Building/Fees",
+          "last_verified_at": "2024-09-10T00:00:00Z",
+          "trust_basis": "permit_code_context"
+        }
+      }
+    ],
+    "coverage": {
+      "trade": "hvac",
+      "state": "FL",
+      "county": null,
+      "city": "Orlando",
+      "records_returned": 1,
+      "quote_safe_only": true,
+      "trust_basis": "Official jurisdiction portals are loaded first; unresolved fee and permit rules return with quote_safe=false."
+    }
+  }
+}
+```

@@ -1,0 +1,132 @@
+---
+title: "Use Compare Hub to Evaluate Finance and Equipment Options"
+sidebarTitle: "Compare Hub"
+description: "Evaluate finance programs, solar inverters, solar modules, and HVAC equipment side by side with scenario inputs, trust indicators, and source context."
+---
+
+Before you write a line of integration code, you need to understand whether the data actually fits your use case. Compare Hub is a dashboard tool — not an API — that lets you select compatible records from any supported dataset, compare them side by side with real scenario inputs, and inspect the source and trust metadata behind each value. It is the fastest way to validate that Home Service Data has what you need and to understand the differences between specific programs, products, or equipment options before committing them to a quote.
+
+## What Compare Hub is
+
+Compare Hub lives at `/dashboard/compare` and works with data you have already browsed in the Catalog. Select records in a Catalog table, click **Compare**, and the workspace opens with your selection loaded. You can add or remove records without leaving the page, adjust scenario inputs to see how the numbers change, and export the comparison or copy the equivalent API request shape when you are ready to build.
+
+Compare Hub enforces compatible comparisons only: finance programs compare with finance programs, inverters compare with inverters, HVAC equipment compares with HVAC equipment. Mixing incompatible record types is blocked by design — the goal is a decision-quality view, not a generic field dump.
+
+## Launch compare modes
+
+Four compare modes are available at launch. Each mode is tuned to a specific business decision.
+
+| Mode | What you compare | Primary decision |
+|---|---|---|
+| `finance-programs` | Current finance fee and program rows | Identify the lowest monthly payment, lifetime cost, and dealer fee impact for a project |
+| `solar-inverters` | Solar inverter product records | Compare inverter cost assumptions and per-watt or per-panel design adjustments |
+| `solar-modules` | Solar module product records | Compare wattage, efficiency, electrical specs, and cost per watt for a system target |
+| `hvac-equipment` | HVAC equipment records | Compare installed cost range, SEER2/HSPF2 efficiency, AHRI readiness, and pricing confidence |
+
+## Starting a comparison
+
+<Steps>
+  <Step title="Open the Catalog">
+    Navigate to **Dashboard → Catalog** and select the dataset you want to explore — for example, Finance Fee Records or HVAC Equipment.
+  </Step>
+  <Step title="Select records">
+    Check the rows you want to compare. The table supports multi-select; you can select two to four records. A **Compare** bar appears at the bottom of the table as you build your selection.
+  </Step>
+  <Step title="Click Compare">
+    Click the **Compare** button in the bar. The workspace opens at `/dashboard/compare/[mode]` with your selected records loaded. The mode is inferred from the type of records you selected.
+  </Step>
+  <Step title="Add or remove items">
+    To swap in a different record, click **Add item** in the workspace header. A search sheet opens — scoped to the current mode — so you can find and add records without losing your current comparison. Already-selected rows are disabled to avoid duplicates.
+  </Step>
+</Steps>
+
+## The comparison workspace
+
+Once your records are loaded, the workspace is organized into four sections.
+
+<CardGroup cols={2}>
+  <Card title="Metric cards" icon="bar-chart-2">
+    Three to six mode-specific primary metrics displayed prominently at the top — for example, monthly payment, lifetime payments, and dealer fee percent for finance programs, or SEER2 and estimated installed price for HVAC equipment.
+  </Card>
+  <Card title="Compare matrix" icon="table">
+    A grouped field table showing all selected records side by side. Toggle **Differences only** to hide fields where all values match. Missing fields are marked explicitly — incomplete data is visible, not hidden.
+  </Card>
+  <Card title="Trust and source panel" icon="shield">
+    Per-record trust metadata: `quote_safe` status, confidence level, `last_verified_at`, source document link, and any `unresolved_requirements` that block a record from being quote-safe.
+  </Card>
+  <Card title="Decision summary" icon="check-circle">
+    A best-match card with a plain-language explanation of why one record scores highest under your current scenario inputs, plus the top trade-off to consider.
+  </Card>
+</CardGroup>
+
+## Scenario inputs
+
+Scenario inputs change the metric calculations in real time without reloading the page. The available inputs depend on the active compare mode.
+
+<Tabs>
+  <Tab title="Finance Programs">
+    Finance program scenario inputs let you model the actual payment impact for a specific project.
+
+    | Input | Description |
+    |---|---|
+    | **Project cost** | Total project amount in dollars |
+    | **Down payment** | Customer down payment amount |
+    | **Payment type** | Loan, lease, or PACE |
+    | **Term** | Filter to programs with a specific term length |
+
+    Changing the project cost and down payment immediately recalculates monthly payment, lifetime payments, dealer fee dollars, and APR across all selected programs — so you can compare the real cost difference between programs for a specific customer scenario rather than comparing abstract rate sheet numbers.
+  </Tab>
+  <Tab title="HVAC Equipment">
+    HVAC equipment scenario inputs add location and pricing context to the efficiency comparison.
+
+    | Input | Description |
+    |---|---|
+    | **State** | Two-letter state code for incentive and climate context |
+    | **County** | County name for eligibility scoping |
+    | **Measure** | Measure key, e.g. `air_source_heat_pump` |
+    | **Installed price** | Your assumed installed cost for scenario modeling |
+
+    Setting a state and county enables incentive-aware comparisons — the workspace pulls available incentive programs and adjusts the net cost estimates for each piece of equipment accordingly.
+  </Tab>
+</Tabs>
+
+## `quote_safe` and confidence indicators
+
+Every record in the compare workspace displays its verification status clearly — not buried in a tooltip.
+
+- **`quote_safe: true`** — The record has passed the full Home Service Data verification cycle and is safe to use in customer-facing quotes and binding calculations.
+- **`quote_safe: false`** — The record has not yet completed verification. It may be useful for internal research but should not appear in customer quotes.
+- **Confidence level** — A qualitative rating (`high`, `medium`, `low`) that reflects source coverage and data freshness.
+- **Unresolved requirements** — Specific conditions that must be met before a record can be considered quote-safe, listed per record in the trust panel.
+
+Records with `quote_safe: false` remain visible in the comparison so you can see what data exists and what its current status is — but they are clearly labeled so you never accidentally act on unverified data.
+
+## Exporting a comparison and copying the API request
+
+When you are ready to move from exploration to integration, Compare Hub gives you two export options.
+
+<CardGroup cols={2}>
+  <Card title="Export JSON or CSV" icon="download">
+    Click **Export** in the workspace header to download the current comparison as JSON or CSV. This includes all displayed fields, metric values, and trust metadata for every selected record.
+  </Card>
+  <Card title="Copy API request" icon="code">
+    Click **Copy API request** to get the equivalent `quote-context` or sync API call that would return these records. Paste it directly into your integration as a starting point.
+  </Card>
+</CardGroup>
+
+The copied API request reflects the current scenario inputs — state, county, measure, and any active filters — so it is immediately usable as a curl command or as the basis for a TypeScript fetch call.
+
+<Tip>
+Use Compare Hub before writing any integration code. Load the records your application will use, set realistic scenario inputs for your market, and verify that the `quote_safe` and confidence indicators meet your quality bar. This takes five minutes and prevents building an integration on top of data that turns out to be incomplete or context-only.
+</Tip>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quoting Tools" icon="file-text" href="/guides/quoting-tools">
+    Integrate the records you validated in Compare Hub into your quoting flow using the quote-context endpoint.
+  </Card>
+  <Card title="Sync Integration" icon="refresh-cw" href="/guides/sync-integration">
+    Build a local database mirror of the datasets you explored in Compare Hub for zero-latency quote paths.
+  </Card>
+</CardGroup>

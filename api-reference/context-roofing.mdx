@@ -1,0 +1,174 @@
+---
+title: "GET /api/v1/context/roofing — Materials and Labor"
+sidebarTitle: "Roofing"
+description: "Retrieve roofing material specs — warranty, wind rating, fire class, and impact rating — plus optional BLS regional labor rates for roofing crews."
+---
+
+The roofing context endpoint returns manufacturer-backed shingle and roofing material specifications alongside optional BLS regional labor rates for roofing contractors (SOC `47-2181`). Material records include structural and performance specs — warranty years, wind rating, fire class, and UL impact rating class — which are commonly used to match products to insurance requirements and incentive programs. Pass `include_labor=true` to receive the BLS labor context in the same response, avoiding a second API call when building a roofing quote.
+
+**Endpoint**
+
+```
+GET https://homeservicedata.com/api/v1/context/roofing
+```
+
+## Query Parameters
+
+<ParamField query="manufacturer" type="string">
+  Filter by manufacturer name. Partial match, case-insensitive (e.g., `GAF`, `Owens Corning`).
+</ParamField>
+
+<ParamField query="material_type" type="string">
+  Filter by material type. Partial match, case-insensitive (e.g., `asphalt_shingle`, `metal`, `tile`).
+</ParamField>
+
+<ParamField query="impact_rating_class" type="integer">
+  Filter by UL 2218 impact resistance class. One of: `1`, `2`, `3`, `4`. Class 4 is the highest impact resistance.
+</ParamField>
+
+<ParamField query="quote_safe" type="boolean">
+  When `true`, returns only material records verified for quote use.
+</ParamField>
+
+<ParamField query="include_labor" type="boolean" default="false">
+  When `true`, the response includes a `labor` array of BLS regional labor rate records for roofing contractors (SOC `47-2181`).
+</ParamField>
+
+<ParamField query="state" type="string">
+  Two-letter state code. Only used when `include_labor=true` to scope labor results to a state.
+</ParamField>
+
+<ParamField query="include_states" type="boolean" default="false">
+  When `true` and `include_labor=true`, state-level labor records are included alongside metro records.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="100">
+  Maximum number of material records to return. Capped at `500`. Labor results are always capped at `100`.
+</ParamField>
+
+## Response Fields
+
+<ResponseField name="materials" type="array">
+  Array of roofing material context objects.
+
+  <Expandable title="Material record fields">
+    <ResponseField name="record_id" type="string">Unique record identifier.</ResponseField>
+    <ResponseField name="product_id" type="string | null">Internal product identifier if matched to the product catalog.</ResponseField>
+    <ResponseField name="manufacturer" type="string">Manufacturer name.</ResponseField>
+    <ResponseField name="product_line" type="string | null">Product line or series name (e.g., `Timberline HDZ`, `Duration`).</ResponseField>
+    <ResponseField name="material_type" type="string">Material category (e.g., `asphalt_shingle`, `metal_standing_seam`, `clay_tile`).</ResponseField>
+
+    <ResponseField name="specs" type="object">
+      Technical specifications for the product.
+      <Expandable title="specs fields">
+        <ResponseField name="warranty_years" type="integer | null">Manufacturer warranty period in years.</ResponseField>
+        <ResponseField name="wind_rating_mph" type="integer | null">Rated wind resistance in mph (per ASTM D3161/D7158).</ResponseField>
+        <ResponseField name="fire_class" type="string | null">UL fire resistance class: `A`, `B`, `C`, or `unrated`.</ResponseField>
+        <ResponseField name="impact_rating_class" type="integer | null">UL 2218 impact resistance class (1–4).</ResponseField>
+        <ResponseField name="exposure_inches" type="number | null">Standard weather exposure in inches.</ResponseField>
+        <ResponseField name="bundles_per_square" type="number | null">Number of bundles per roofing square (100 sq ft).</ResponseField>
+        <ResponseField name="weight_per_square_lbs" type="integer | null">Weight per roofing square in pounds.</ResponseField>
+        <ResponseField name="algae_resistance_years" type="integer | null">Algae-resistance warranty period in years, if applicable.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="quote_safe" type="boolean">Whether this record is cleared for customer-facing quote use.</ResponseField>
+    <ResponseField name="confidence" type="string | null">Confidence tier: `high`, `medium`, or `low`.</ResponseField>
+
+    <ResponseField name="provenance" type="object">
+      Source traceability.
+      <Expandable title="provenance fields">
+        <ResponseField name="source_document_id" type="string | null">Internal source document reference.</ResponseField>
+        <ResponseField name="source_url" type="string | null">URL to the manufacturer product page or spec sheet.</ResponseField>
+        <ResponseField name="last_verified_at" type="string | null">ISO 8601 timestamp of last verification.</ResponseField>
+        <ResponseField name="trust_basis" type="string">Always `roofing_material_context`.</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="labor" type="array | null">
+  BLS regional labor rate records for roofing (SOC `47-2181`). Only present when `include_labor=true`. Structure mirrors the `/api/v1/context/labor` response records. See the [Labor context reference](/api-reference/context-labor) for full field descriptions.
+</ResponseField>
+
+<ResponseField name="coverage" type="object">
+  Query summary metadata.
+  <Expandable title="Coverage fields">
+    <ResponseField name="material_records_returned" type="integer">Number of material records returned.</ResponseField>
+    <ResponseField name="labor_records_returned" type="integer">Number of labor records returned (0 if `include_labor` was not set).</ResponseField>
+    <ResponseField name="quote_safe_only" type="boolean">Whether material results were restricted to quote-safe records.</ResponseField>
+    <ResponseField name="trust_basis" type="string">Description of the trust model for this dataset.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Tip>
+  Class 4 impact-rated shingles (`impact_rating_class=4`) often qualify for homeowner insurance discounts. Surfacing this spec in a quote can strengthen close rates in hail-prone markets.
+</Tip>
+
+## Example Request
+
+<CodeGroup>
+
+```bash Materials Only
+curl -G https://homeservicedata.com/api/v1/context/roofing \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "manufacturer=GAF" \
+  --data-urlencode "impact_rating_class=4" \
+  --data-urlencode "quote_safe=true" \
+  --data-urlencode "limit=5"
+```
+
+```bash Materials with Labor
+curl -G https://homeservicedata.com/api/v1/context/roofing \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "manufacturer=GAF" \
+  --data-urlencode "include_labor=true" \
+  --data-urlencode "state=TX" \
+  --data-urlencode "limit=5"
+```
+
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "materials": [
+      {
+        "record_id": "rfg_01hzka1bc2de3fg4hi5jk6cdef",
+        "product_id": "prd_01hzka1bc2de3fg4hi5gaf001",
+        "manufacturer": "GAF",
+        "product_line": "Timberline HDZ",
+        "material_type": "asphalt_shingle",
+        "specs": {
+          "warranty_years": 30,
+          "wind_rating_mph": 130,
+          "fire_class": "A",
+          "impact_rating_class": 4,
+          "exposure_inches": 5.625,
+          "bundles_per_square": 3,
+          "weight_per_square_lbs": 240,
+          "algae_resistance_years": 25
+        },
+        "quote_safe": true,
+        "confidence": "high",
+        "provenance": {
+          "source_document_id": "doc_01hzka1bc2de3fg4hi5gafhdz",
+          "source_url": "https://www.gaf.com/en-us/roofing-products/residential-roofing/shingles/timberline-hdz",
+          "last_verified_at": "2024-10-01T00:00:00Z",
+          "trust_basis": "roofing_material_context"
+        }
+      }
+    ],
+    "labor": null,
+    "coverage": {
+      "material_records_returned": 1,
+      "labor_records_returned": 0,
+      "quote_safe_only": true,
+      "trust_basis": "Roofing material context is manufacturer-page backed. Roofing labor returns BLS rows when SOC 47-2181 has been loaded."
+    }
+  }
+}
+```

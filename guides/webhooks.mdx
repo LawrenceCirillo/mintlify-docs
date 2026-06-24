@@ -1,0 +1,182 @@
+---
+title: "Get Notified When Home Service Data Datasets Update"
+sidebarTitle: "Webhooks"
+description: "Receive webhook events the moment a dataset is published or updated so your local cache and CRM records stay current without polling."
+---
+
+Scheduled polling keeps your local database roughly in sync, but there is always a gap between when Home Service Data publishes a new dataset version and when your next cron job runs. Webhooks close that gap: every time a dataset version is published, Home Service Data emits a `dataset.version.published` event to your registered endpoint. Your handler can immediately pull the delta and apply it — so your data is current within seconds of a lender updating their rate sheet or a new incentive program going live.
+
+## Event type
+
+Home Service Data currently publishes one webhook event type:
+
+| Event | Trigger |
+|---|---|
+| `dataset.version.published` | A new version of a dataset is recorded and made available via the sync API |
+
+## Webhook payload
+
+Every `dataset.version.published` event delivers a JSON payload with the following shape:
+
+```json
+{
+  "event_type": "dataset.version.published",
+  "payload": {
+    "dataset_key": "finance_fees",
+    "version_id": "3f8a2c14-...",
+    "version_number": 43,
+    "cursor": "finance_fees:v43:3f8a2c14-...",
+    "previous_cursor": "finance_fees:v42:...",
+    "changed_row_count": 12,
+    "row_count": 289,
+    "quote_safe_count": 253,
+    "trade_category": "hvac",
+    "source_document_id": "doc_...",
+    "source_kind": "lender_rate_sheet",
+    "trigger": "admin_publish",
+    "published_by": "system",
+    "published_at": "2025-01-15T14:32:00Z",
+    "pull_deltas_url": "https://homeservicedata.com/api/v1/sync/changes?dataset=finance_fees&since=finance_fees%3Av42%3A...",
+    "snapshot_url": "https://homeservicedata.com/api/v1/sync/snapshot?dataset=finance_fees&trade=hvac",
+    "requires_snapshot": false
+  }
+}
+```
+
+### Field reference
+
+| Field | Type | Description |
+|---|---|---|
+| `dataset_key` | string | The dataset that was updated (e.g. `finance_fees`) |
+| `version_number` | number | Monotonically increasing version counter for this dataset |
+| `cursor` | string | The new cursor representing this version |
+| `previous_cursor` | string \| null | The cursor of the prior version; `null` on first publish |
+| `changed_row_count` | number | Number of individual record changes in this version |
+| `row_count` | number | Total records in the dataset after this publish |
+| `quote_safe_count` | number | Number of records currently marked `quote_safe: true` |
+| `trade_category` | string \| null | Trade scope of the version, or `null` for cross-trade datasets |
+| `published_at` | string | ISO 8601 timestamp of the publish event |
+| `pull_deltas_url` | string | Pre-built URL to call for the delta since `previous_cursor` |
+| `snapshot_url` | string | Pre-built URL to call for a full snapshot of this dataset |
+| `requires_snapshot` | boolean | `true` when `previous_cursor` is `null` — signals you must fetch the full snapshot |
+
+## Using `pull_deltas_url`
+
+The `pull_deltas_url` field is a ready-to-use URL that encodes exactly the delta between the previous version and the new one. Call it immediately after receiving the event to get only the records that changed — no need to calculate parameters manually.
+
+When `requires_snapshot` is `true`, it means this is the first version ever published for the dataset (there is no previous cursor to delta from). In that case, use `snapshot_url` instead of `pull_deltas_url` to seed your local table.
+
+```typescript
+if (event.payload.requires_snapshot) {
+  // First publish — fetch the full snapshot
+  const response = await fetch(event.payload.snapshot_url, {
+    headers: { "x-api-key": process.env.HSD_API_KEY! },
+  });
+  const { data } = await response.json();
+  await seedDatabase(data.records);
+  await db.setCursor(event.payload.dataset_key, data.sync.cursor);
+} else {
+  // Incremental update — pull only what changed
+  const response = await fetch(event.payload.pull_deltas_url, {
+    headers: { "x-api-key": process.env.HSD_API_KEY! },
+  });
+  const { data } = await response.json();
+  await applyChanges(data.changes);
+  await db.setCursor(event.payload.dataset_key, data.latest_cursor);
+}
+```
+
+## Setting up your webhook endpoint
+
+<Steps>
+  <Step title="Create your handler endpoint">
+    Deploy an HTTPS endpoint in your application that accepts `POST` requests. The endpoint must return `200 OK` within a few seconds or the delivery will be retried.
+
+    ```typescript
+    // Your webhook handler — accepts POST requests at the registered URL
+    export async function handleWebhook(request: Request): Promise<Response> {
+      const secret = request.headers.get("x-webhook-secret");
+
+      // Always verify the secret before processing
+      if (secret !== process.env.HSD_WEBHOOK_SECRET) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      const body = await request.json();
+      const { event_type, payload } = body;
+
+      if (event_type === "dataset.version.published") {
+        // Process asynchronously so you respond quickly
+        void processDatasetUpdate(payload);
+      }
+
+      return Response.json({ received: true });
+    }
+
+    async function processDatasetUpdate(payload: {
+      dataset_key: string;
+      requires_snapshot: boolean;
+      pull_deltas_url: string;
+      snapshot_url: string;
+      cursor: string;
+    }) {
+      const url = payload.requires_snapshot
+        ? payload.snapshot_url
+        : payload.pull_deltas_url;
+
+      const response = await fetch(url, {
+        headers: { "x-api-key": process.env.HSD_API_KEY! },
+      });
+
+      const { data, error } = await response.json();
+
+      if (error) {
+        console.error(`[webhook] Sync error for ${payload.dataset_key}:`, error);
+        return;
+      }
+
+      if (payload.requires_snapshot) {
+        await seedDatabase(data.records);
+      } else {
+        await applyChanges(data.changes);
+      }
+
+      await db.setCursor(payload.dataset_key, payload.cursor);
+      console.log(`[webhook] ${payload.dataset_key} updated to v${payload.cursor}`);
+    }
+    ```
+
+  </Step>
+  <Step title="Register the endpoint in the Dashboard">
+    1. Open the **Dashboard** and navigate to **Settings → Webhooks**.
+    2. Click **Add endpoint**.
+    3. Enter your HTTPS endpoint URL.
+    4. Select the `dataset.version.published` event.
+    5. Click **Save**. The Dashboard will display a generated webhook secret.
+  </Step>
+  <Step title="Store the webhook secret">
+    Copy the webhook secret shown in the Dashboard and store it as an environment variable (e.g. `HSD_WEBHOOK_SECRET`). You will use it to verify incoming requests.
+  </Step>
+  <Step title="Test the delivery">
+    Use the **Send test event** button in the Dashboard to fire a sample payload at your endpoint. Check your application logs to confirm the handler received the event and responded with `200 OK`.
+  </Step>
+</Steps>
+
+<Note>
+Always verify the `x-webhook-secret` header on every incoming request before processing the payload. Requests that do not include the correct secret should be rejected with a `401` or `403` response. Never trust the payload without this check.
+</Note>
+
+## Retry behavior
+
+If your endpoint returns a non-`2xx` status or does not respond within the timeout window, Home Service Data will retry the delivery using an exponential backoff schedule. Design your handler to be idempotent — receiving the same event twice should produce the same result as receiving it once.
+
+## Related guides
+
+<CardGroup cols={2}>
+  <Card title="Sync Integration" icon="refresh-cw" href="/guides/sync-integration">
+    Full step-by-step guide to snapshot seeding, cursor management, and applying delta changes.
+  </Card>
+  <Card title="CRM Integration" icon="users" href="/guides/crm-integration">
+    Connect dataset update events to CRM field enrichment and lead qualification workflows.
+  </Card>
+</CardGroup>

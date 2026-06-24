@@ -1,0 +1,146 @@
+---
+title: "Quote-Safe Data: When Data Is Ready for Customer Quotes"
+sidebarTitle: "Quote-Safe"
+description: "The quote_safe flag marks records that passed source review and verification. Context-only records must not appear in live customer quote calculations."
+---
+
+Every record returned by the Home Service Data API carries a `quote_safe` boolean. This single field is the platform's data-quality contract between verified source data and your customer-facing quoting workflow. When `quote_safe` is `true`, the record has passed a documented review process that confirms the source, effective dates, and lender or program status. When it is `false`, the record is context-quality information suitable for display and analysis but not for driving a payment calculation or a customer commitment.
+
+## What `quote_safe` Means
+
+A record is marked `quote_safe: true` only after it clears all of the following gates:
+
+- **Source review** — the record's origin document has been reviewed and confirmed as a primary or authoritative source (e.g., a lender rate sheet, a published program document, a distributor price list)
+- **Effective date validation** — the record's `effective_date` and `expires_at` fields have been checked to confirm the record is active at publish time
+- **Lender or program verification** — for finance packets, the dealer fee, interest rate, and program terms have been confirmed against the lender's published schedule
+- **Confidence threshold** — the record's internal `confidence` score meets the minimum required for quote use
+- **No unresolved requirements** — any `unresolved_requirements` field on the record is empty or null
+
+If any of these gates fail, the record is published with `quote_safe: false`. It remains in the dataset so your application can display it as reference context, but you must not route it into live quote math.
+
+## Provenance Fields on Quote-Safe Records
+
+Quote-safe records always include a set of provenance fields that let you show your customers (and your own compliance team) where the data came from and when it was last confirmed.
+
+```json
+{
+  "finance_program_version_id": "fpv_01J9K2MQ4N7PXRV8TZWFCB3DHL",
+  "financier_name": "Greensky",
+  "product_title": "Home Improvement Loan 9.99% / 84mo",
+  "payment_type": "loan",
+  "interest_rate": 9.99,
+  "term_months": 84,
+  "fee_percentage": 7.5,
+  "effective_date": "2024-10-01",
+  "expires_at": null,
+  "last_verified_at": "2025-01-15T08:00:00Z",
+  "source_url": "https://partner.greensky.com/rates/Q1-2025.pdf",
+  "confidence": 0.97,
+  "quote_safe": true
+}
+```
+
+The three provenance fields to surface in your application:
+
+| Field | Purpose |
+|---|---|
+| `last_verified_at` | ISO timestamp of the most recent review pass. Show this when customers ask "how current is this rate?" |
+| `source_url` | Direct link to the source document. Use for compliance audit trails and internal review. |
+| `confidence` | Float between 0 and 1. Quote-safe records always have a confidence score at or above the packet's required threshold. |
+
+<Tip>
+  Display `last_verified_at` in your quote UI as a freshness indicator. For finance records, something like "Rate verified Jan 15, 2025" increases customer trust and gives your team a clear signal when to request a data refresh.
+</Tip>
+
+## Context-Only Records (`quote_safe: false`)
+
+Records with `quote_safe: false` are published to help you build richer interfaces — displaying program overviews, comparing incentive ranges, showing utility context, or populating compare views — without being safe to use in a binding quote. Common reasons a record carries `quote_safe: false`:
+
+- The source document is a secondary reference, not a primary program schedule
+- The effective dates are unknown or the record predates the last verification window
+- The lender or program has unresolved verification requirements
+- The confidence score falls below the packet's threshold
+- The record is structural context (e.g., a climate zone or utility territory boundary) that has no direct dollar value
+
+<Warning>
+  **Do not use context-only records in live quote calculations.** This includes monthly payment estimates, incentive dollar amounts, dealer fee inputs, and any number shown to a customer as a commitment. Context-only data is explicitly not a data-quality contract and may be outdated or approximate.
+</Warning>
+
+### When to Use Context-Only Records
+
+Context records are appropriate for:
+
+- Displaying program overviews, summaries, or "what is this product?" descriptions alongside a quote-safe payment row
+- Populating a Compare Hub view where the user is researching options, not finalizing a quote
+- Showing incentive program names and rough ranges before a customer enters specific equipment details
+- Climate and utility territory lookups that feed into software calculations (where your own calculation layer applies the final math)
+
+## The AHRI-Specific Quote-Safe Gate
+
+AHRI matched-system records (`hvac_ahri_matches`) have an additional gate beyond the standard review process. Because AHRI certification data is licensed content, records in this packet are only eligible for `quote_safe: true` if your account holds an active AHRI data license entitlement.
+
+If your account does not carry the AHRI license, all `hvac_ahri_matches` records are served with `quote_safe: false` regardless of their verification status. You can still use them for system lookup, model matching, and SEER2/HSPF2 reference, but you may not route them into a customer quote as certified performance data.
+
+<Note>
+  Contact your account manager to add AHRI license entitlement to your plan. The license status is shown on the `hvac_ahri_matches` packet card in your Data Catalog.
+</Note>
+
+## Coverage Summary in Responses
+
+Every response from a sync endpoint includes a coverage summary in the `version` object so you can monitor quote-safe health without counting records client-side.
+
+```json
+{
+  "version": {
+    "id": "dv_01JAFK8MQ3R2BVNP7SXZWYH1CG",
+    "number": 42,
+    "cursor": "dv_01JAFK8MQ3R2BVNP7SXZWYH1CG",
+    "published_at": "2025-01-20T12:00:00Z",
+    "row_count": 1240,
+    "quote_safe_count": 987
+  }
+}
+```
+
+The three coverage fields:
+
+| Field | Description |
+|---|---|
+| `row_count` | Total number of records in this version of the dataset |
+| `quote_safe_count` | Number of records where `quote_safe: true` |
+| `not_quote_safe` (derived) | `row_count - quote_safe_count` — records that are context-only |
+
+You can calculate `not_quote_safe` as `row_count - quote_safe_count`. Your dashboard also surfaces this breakdown per packet on the workspace home screen.
+
+<Note>
+  A drop in `quote_safe_count` between versions is a signal to review the dataset release notes. It may indicate that a lender updated their program terms, causing previously verified records to require re-review.
+</Note>
+
+## Requesting Only Quote-Safe Records
+
+The API and the SDK both support a `quote_safe_only` filter so you never accidentally load context records into a quoting context.
+
+**Via API query parameter:**
+
+```http
+GET /api/v1/sync/snapshot?dataset=finance_fees&quote_safe_only=true
+```
+
+**Via the TypeScript SDK:**
+
+```typescript
+const snapshot = await client.getSnapshot("finance_fees", {
+  quoteSafeOnly: true,
+});
+// snapshot.records contains only records where quote_safe === true
+```
+
+The SDK's `filterQuoteSafe` utility is also exported for cases where you cache the full snapshot and need to filter at read time:
+
+```typescript
+import { filterQuoteSafe } from "hsd-client-sdk";
+
+const safeRecords = filterQuoteSafe(cachedSnapshot.records);
+```
+
+For a full breakdown of which access level is required to receive quote-safe data in live applications, see [API Access Levels](/concepts/access-levels).

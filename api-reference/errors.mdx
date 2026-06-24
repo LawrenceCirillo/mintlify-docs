@@ -1,0 +1,267 @@
+---
+title: "API Error Codes and How to Handle Them"
+sidebarTitle: "Errors"
+description: "HTTP status codes, error response shape, real error messages, rate-limit headers, and a retry strategy for the Home Service Data REST API."
+---
+
+When a request cannot be fulfilled, the API returns a non-2xx HTTP status code and an error envelope in the response body. The envelope follows the same three-field structure as successful responses, with `data` set to `null` and the human-readable reason in `error`. Understanding the specific message — not just the status code — is the fastest path to a working fix.
+
+## Error Envelope
+
+Every error response has this shape:
+
+```json
+{
+  "data": null,
+  "error": "Missing x-api-key header.",
+  "meta": null
+}
+```
+
+<ResponseField name="data" type="null">
+  Always `null` on error responses.
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  A plain-English description of what went wrong. The message is stable and safe to log, display in developer tooling, or use in conditional logic.
+</ResponseField>
+
+<ResponseField name="meta" type="null">
+  Always `null` on error responses.
+</ResponseField>
+
+## HTTP Status Codes
+
+### 400 — Bad Request
+
+The request was well-formed HTTP but contained invalid or missing parameters. The `error` field explains exactly which parameter is the problem. Do not retry a 400 — fix the request first.
+
+<CodeGroup>
+```json Missing required parameter
+{
+  "data": null,
+  "error": "Query parameter 'q' is required (min 2 characters).",
+  "meta": null
+}
+```
+
+```json Invalid enum value
+{
+  "data": null,
+  "error": "Unsupported trade \"painting\". Use solar, hvac, roofing, plumbing, electrical, or context.",
+  "meta": null
+}
+```
+
+```json Invalid state code
+{
+  "data": null,
+  "error": "Invalid state. Use a two-letter state code.",
+  "meta": null
+}
+```
+
+```json Invalid quote_safe value
+{
+  "data": null,
+  "error": "Invalid quote_safe. Use true or false.",
+  "meta": null
+}
+```
+
+```json Missing benchmark metric
+{
+  "data": null,
+  "error": "Missing required parameter: metric.",
+  "meta": null
+}
+```
+</CodeGroup>
+
+**Common causes:** missing required parameters, values outside of documented enums, malformed numbers or dates, or search queries shorter than two characters.
+
+---
+
+### 401 — Unauthorized
+
+The request was rejected because no valid API key was found. Check that:
+
+1. The `x-api-key` header is present on every request.
+2. The key value is copied exactly — no leading/trailing whitespace.
+3. The key has not been revoked.
+
+<CodeGroup>
+```json Missing header
+{
+  "data": null,
+  "error": "Missing x-api-key header.",
+  "meta": null
+}
+```
+
+```json Invalid key
+{
+  "data": null,
+  "error": "Invalid API key.",
+  "meta": null
+}
+```
+</CodeGroup>
+
+---
+
+### 403 — Forbidden
+
+Your API key is valid but does not have the access level required for the requested dataset or endpoint.
+
+<CodeGroup>
+```json Dataset access required
+{
+  "data": null,
+  "error": "Dataset access required: finance_fees requires production access.",
+  "meta": null
+}
+```
+
+```json Deactivated key
+{
+  "data": null,
+  "error": "API key is deactivated.",
+  "meta": null
+}
+```
+
+```json Organization scope missing
+{
+  "data": null,
+  "error": "Dataset access requires an organization-scoped API key.",
+  "meta": null
+}
+```
+</CodeGroup>
+
+Dataset access levels are `sample → sandbox → production`. If your key has `sandbox` access and the endpoint requires `production`, you will receive a 403. Contact your account manager to upgrade entitlements.
+
+When a 403 is returned for a dataset access violation, the response also includes diagnostic headers:
+
+| Header | Value |
+|---|---|
+| `X-HSD-Dataset` | The dataset key that was checked (e.g. `finance_fees`) |
+| `X-HSD-Access-Required` | The minimum access level needed (e.g. `production`) |
+| `X-HSD-Access-Current` | Your current effective access level (e.g. `sandbox`) |
+
+---
+
+### 404 — Not Found
+
+The requested resource does not exist. This can mean a nonexistent endpoint path, or an entity ID that is not in the database. Verify the URL path and any ID parameters.
+
+---
+
+### 429 — Rate Limited
+
+Your API key has exceeded either its per-minute request rate or its monthly quota.
+
+<CodeGroup>
+```json Per-minute rate limit
+{
+  "data": null,
+  "error": "Rate limit exceeded. Maximum 60 requests per minute.",
+  "meta": null
+}
+```
+
+```json Monthly quota exceeded
+{
+  "data": null,
+  "error": "Monthly API quota exceeded.",
+  "meta": null
+}
+```
+</CodeGroup>
+
+**Rate-limit headers** are included on every 429 response:
+
+| Header | Description |
+|---|---|
+| `X-RateLimit-Limit` | The maximum requests allowed per minute for your key |
+| `X-RateLimit-Remaining` | Requests remaining in the current window |
+| `Retry-After` | Seconds to wait before retrying (per-minute limit only) |
+
+For monthly quota exhaustion, the response includes `X-MonthlyQuota-Limit` and `X-MonthlyQuota-Remaining: 0`. Monthly quotas reset at UTC midnight on the first of each month.
+
+---
+
+### 500 — Internal Server Error
+
+An unexpected error occurred on the server. The platform team is automatically alerted. Retry with exponential backoff (see below). If the error persists for more than a few minutes, contact support.
+
+```json
+{
+  "data": null,
+  "error": "Internal server error.",
+  "meta": null
+}
+```
+
+---
+
+### 503 — Service Unavailable
+
+The rate-limiting subsystem is temporarily unavailable. The request was not counted against your limit. Treat this the same as a 500 and retry with backoff.
+
+```json
+{
+  "data": null,
+  "error": "API key rate limiting is temporarily unavailable.",
+  "meta": null
+}
+```
+
+---
+
+## Retry Strategy
+
+<Warning>
+  Never retry 4xx errors except 429. Retrying a 400 or 401 without fixing the underlying problem will burn your quota and produce the same result every time.
+</Warning>
+
+Use exponential backoff with jitter for 429 and 5xx errors:
+
+```typescript
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 4) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options);
+
+    if (response.ok) return response;
+
+    const status = response.status;
+
+    // Do not retry client errors (except 429)
+    if (status >= 400 && status < 500 && status !== 429) {
+      throw new Error(`Client error ${status}: ${await response.text()}`);
+    }
+
+    if (attempt === maxRetries) {
+      throw new Error(`Request failed after ${maxRetries} retries: ${status}`);
+    }
+
+    // Respect Retry-After on 429; otherwise use exponential backoff
+    const retryAfterHeader = response.headers.get("Retry-After");
+    const retryAfterSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : null;
+    const backoffMs = retryAfterSeconds
+      ? retryAfterSeconds * 1000
+      : Math.min(1000 * 2 ** attempt + Math.random() * 500, 30_000);
+
+    await new Promise((resolve) => setTimeout(resolve, backoffMs));
+  }
+}
+```
+
+**Rules of thumb:**
+
+- Start with a 1-second base delay and double on each retry.
+- Add random jitter (up to 500 ms) to avoid thundering-herd effects.
+- Cap the maximum wait at 30 seconds.
+- Stop retrying after 4 attempts and surface the error to your monitoring system.
+- Always honour the `Retry-After` header value on 429 responses — it tells you exactly when the rate-limit window resets.

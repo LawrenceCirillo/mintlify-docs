@@ -1,0 +1,340 @@
+---
+title: "GET /api/v1/context/finance-products — Lender Context"
+sidebarTitle: "Finance Products"
+description: "Fetch lender and finance-program quick-fact context records — loan limits, APR ranges, eligible measures — kept separate from quote-safe dealer-fee tables."
+---
+
+The `/api/v1/context/finance-products` endpoint returns lender and finance-program context records from the `finance_products` dataset. These records capture broad product facts — loan amount windows, APR ranges, dealer fee structures, eligible and ineligible measures, and sourcing metadata — and are designed for enrichment, comparison, and CRM display rather than direct quote calculation. They are distinct from the quote-safe dealer-fee rows returned by `/api/v1/finance/fees`.
+
+<Warning>
+  Not all records returned by this endpoint are quote-safe. Always check the `quote_safe` field before using a record in a customer-facing quote. Context records sourced from contractor-uploaded PDFs, sample agreements, or lender summaries may have `quote_safe: false` until an official rate or dealer-fee table is approved.
+</Warning>
+
+## Endpoint
+
+```
+GET https://homeservicedata.com/api/v1/context/finance-products
+```
+
+## Request
+
+### Headers
+
+<ParamField header="x-api-key" type="string" required>
+  Your API key. Obtain or rotate keys in your [dashboard](https://homeservicedata.com/dashboard).
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="trade" type="string">
+  Filter by trade category (case-insensitive). Accepted values: `solar`, `hvac`, `roofing`, `plumbing`, `electrical`. Returns a `400` for unrecognized values.
+</ParamField>
+
+<ParamField query="product_type" type="string">
+  Filter by product type. Accepted values: `loan`, `lease`, `pace`, `home_improvement_loan`, `credit_application`, `backup_plan`, `checklist`, `unknown`.
+</ParamField>
+
+<ParamField query="state" type="string">
+  Two-letter state code (e.g. `CA`, `TX`). Post-filters records by `state_scope` — records with an empty `state_scope` are returned for any state.
+</ParamField>
+
+<ParamField query="financier" type="string">
+  Financier name or slug. Matched against both `financier_slug` (exact) and `financier_name` (substring, case-insensitive).
+</ParamField>
+
+<ParamField query="measure" type="string">
+  Filter to records whose `eligible_measures` array contains this exact value (case-insensitive), e.g. `battery_storage`, `heat_pump`.
+</ParamField>
+
+<ParamField query="quote_safe" type="boolean">
+  Pass `true` to return only verified records; `false` to return only unverified context. Omit to return all records. Returns a `400` for values other than `true` or `false`.
+</ParamField>
+
+<ParamField query="limit" type="integer">
+  Maximum number of records to return. Defaults to `100`; hard cap is `250`.
+</ParamField>
+
+## Response
+
+A successful response returns an `application/json` object with `data.records` (the program context rows), `data.coverage` (a summary of the applied filters), and a `usage` block.
+
+### Response Fields
+
+<ResponseField name="data.records" type="array">
+  Array of finance product context objects, ordered by `quote_safe` descending then `last_verified_at` descending.
+
+  <Expandable title="FinanceProductRecord fields">
+    <ResponseField name="id" type="string">
+      Stable UUID for this finance product context record.
+    </ResponseField>
+
+    <ResponseField name="source_document_id" type="string | null">
+      ID of the source document from which this record was extracted.
+    </ResponseField>
+
+    <ResponseField name="trade_category" type="string">
+      Trade this product applies to: `solar`, `hvac`, `roofing`, `plumbing`, or `electrical`.
+    </ResponseField>
+
+    <ResponseField name="financier_name" type="string">
+      Display name of the lender or financing company.
+    </ResponseField>
+
+    <ResponseField name="financier_slug" type="string">
+      URL-safe lender identifier. Use this in the `financier` filter parameter.
+    </ResponseField>
+
+    <ResponseField name="product_name" type="string">
+      Lender's own product name for this program context record.
+    </ResponseField>
+
+    <ResponseField name="product_type" type="string">
+      Product category: `loan`, `lease`, `pace`, `home_improvement_loan`, `credit_application`, `backup_plan`, `checklist`, or `unknown`.
+    </ResponseField>
+
+    <ResponseField name="state_scope" type="string[] | null">
+      Array of two-letter state codes this product is available in. An empty array means nationwide availability. `null` indicates scope is unknown.
+    </ResponseField>
+
+    <ResponseField name="loan_amount_min" type="number | null">
+      Minimum eligible project or loan amount in USD.
+    </ResponseField>
+
+    <ResponseField name="loan_amount_max" type="number | null">
+      Maximum eligible project or loan amount in USD.
+    </ResponseField>
+
+    <ResponseField name="term_months_min" type="integer | null">
+      Shortest available term in months.
+    </ResponseField>
+
+    <ResponseField name="term_months_max" type="integer | null">
+      Longest available term in months.
+    </ResponseField>
+
+    <ResponseField name="apr_min" type="number | null">
+      Lowest advertised APR as a decimal (e.g. `0.0` for 0% promo tiers).
+    </ResponseField>
+
+    <ResponseField name="apr_max" type="number | null">
+      Highest advertised APR as a decimal.
+    </ResponseField>
+
+    <ResponseField name="dealer_fee_type" type="string | null">
+      Describes how the dealer fee is structured: e.g. `percentage`, `flat`, `tiered`.
+    </ResponseField>
+
+    <ResponseField name="dealer_fee_flat" type="number | null">
+      Flat dealer fee amount in USD, when `dealer_fee_type` is `flat`.
+    </ResponseField>
+
+    <ResponseField name="dealer_fee_percent_min" type="number | null">
+      Low end of the dealer fee percentage range (e.g. `0.2` for 20%).
+    </ResponseField>
+
+    <ResponseField name="dealer_fee_percent_max" type="number | null">
+      High end of the dealer fee percentage range.
+    </ResponseField>
+
+    <ResponseField name="eligible_measures" type="string[] | null">
+      Measure keys this product can finance (e.g. `["solar_panels", "battery_storage"]`).
+    </ResponseField>
+
+    <ResponseField name="ineligible_measures" type="string[] | null">
+      Measure keys explicitly excluded from this product.
+    </ResponseField>
+
+    <ResponseField name="requirements" type="object | null">
+      Structured requirement facts extracted from the source (e.g. minimum credit score, contractor enrollment rules).
+    </ResponseField>
+
+    <ResponseField name="unresolved_requirements" type="string[] | null">
+      List of requirement statements from the source document that could not be parsed into structured fields. Review these manually before quoting.
+    </ResponseField>
+
+    <ResponseField name="status" type="string">
+      Internal record lifecycle status (e.g. `active`, `superseded`, `archived`).
+    </ResponseField>
+
+    <ResponseField name="quote_safe" type="boolean">
+      `true` if this record has passed verification review and is cleared for use in quotes. `false` for unverified context records. Always check this field.
+    </ResponseField>
+
+    <ResponseField name="confidence" type="string | null">
+      Data confidence tier as assessed during extraction: `high`, `medium`, or `low`.
+    </ResponseField>
+
+    <ResponseField name="effective_date" type="string | null">
+      ISO 8601 date when this product context became effective.
+    </ResponseField>
+
+    <ResponseField name="expires_at" type="string | null">
+      ISO 8601 datetime after which this context record is no longer valid.
+    </ResponseField>
+
+    <ResponseField name="source_url" type="string | null">
+      URL of the source document or page from which this record was derived.
+    </ResponseField>
+
+    <ResponseField name="last_verified_at" type="string">
+      ISO 8601 datetime when this record was last confirmed against a source.
+    </ResponseField>
+
+    <ResponseField name="source_title" type="string | null">
+      Human-readable title of the source document.
+    </ResponseField>
+
+    <ResponseField name="source_kind" type="string | null">
+      Provenance category of the source: e.g. `official_lender_doc`, `contractor_upload`, `web_scrape`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="data.coverage" type="object">
+  Summary of applied filters and result metadata.
+
+  <Expandable title="coverage fields">
+    <ResponseField name="trade" type="string">
+      The `trade` filter applied, or `"all"` if not filtered.
+    </ResponseField>
+    <ResponseField name="financier" type="string | null">
+      The `financier` filter applied, or `null`.
+    </ResponseField>
+    <ResponseField name="product_type" type="string">
+      The `product_type` filter applied, or `"all"`.
+    </ResponseField>
+    <ResponseField name="state" type="string | null">
+      The `state` filter applied (uppercased two-letter code), or `null`.
+    </ResponseField>
+    <ResponseField name="measure" type="string | null">
+      The `measure` filter applied, or `null`.
+    </ResponseField>
+    <ResponseField name="returned" type="integer">
+      Number of records included in this response after all filters.
+    </ResponseField>
+    <ResponseField name="source" type="string">
+      The dataset key that backed this response: `finance_products`.
+    </ResponseField>
+    <ResponseField name="quote_safe_rule" type="string">
+      Prose explanation of the `quote_safe` semantics for this endpoint.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://homeservicedata.com/api/v1/context/finance-products \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "trade=solar" \
+  --data-urlencode "product_type=loan" \
+  --data-urlencode "state=CA"
+```
+
+```python Python
+import requests
+
+resp = requests.get(
+    "https://homeservicedata.com/api/v1/context/finance-products",
+    headers={"x-api-key": "YOUR_API_KEY"},
+    params={"trade": "solar", "product_type": "loan", "state": "CA"},
+)
+records = resp.json()["data"]["records"]
+```
+
+```javascript JavaScript
+const res = await fetch(
+  "https://homeservicedata.com/api/v1/context/finance-products?trade=solar&product_type=loan&state=CA",
+  { headers: { "x-api-key": "YOUR_API_KEY" } }
+);
+const { records } = (await res.json()).data;
+```
+
+</CodeGroup>
+
+### Example Response
+
+```json
+{
+  "data": {
+    "records": [
+      {
+        "id": "fp_001aaa",
+        "source_document_id": "src_xyz789",
+        "trade_category": "solar",
+        "financier_name": "GoodLeap",
+        "financier_slug": "goodleap",
+        "product_name": "GoodLeap Standard Loan",
+        "product_type": "loan",
+        "state_scope": ["CA", "TX", "FL", "AZ"],
+        "loan_amount_min": 5000,
+        "loan_amount_max": 150000,
+        "term_months_min": 60,
+        "term_months_max": 300,
+        "apr_min": 0.0,
+        "apr_max": 0.0799,
+        "dealer_fee_type": "percentage",
+        "dealer_fee_flat": null,
+        "dealer_fee_percent_min": 0.18,
+        "dealer_fee_percent_max": 0.36,
+        "eligible_measures": ["solar_panels", "battery_storage", "ev_charger"],
+        "ineligible_measures": null,
+        "requirements": {
+          "min_credit_score": 600,
+          "contractor_enrollment": "required"
+        },
+        "unresolved_requirements": null,
+        "status": "active",
+        "quote_safe": true,
+        "confidence": "high",
+        "effective_date": "2024-01-01",
+        "expires_at": null,
+        "source_url": "https://goodleap.com/dealer-program-guide",
+        "last_verified_at": "2024-11-10T09:00:00.000Z",
+        "source_title": "GoodLeap Dealer Program Guide 2024",
+        "source_kind": "official_lender_doc"
+      }
+    ],
+    "coverage": {
+      "trade": "solar",
+      "financier": null,
+      "product_type": "loan",
+      "state": "CA",
+      "measure": null,
+      "returned": 1,
+      "source": "finance_products",
+      "quote_safe_rule": "Quick facts, sample agreements, and contractor-uploaded lender summaries return as context unless an official deterministic rate/dealer-fee table has been approved."
+    }
+  },
+  "usage": {
+    "endpoint": "/api/v1/context/finance-products",
+    "status_code": 200,
+    "duration_ms": 58
+  }
+}
+```
+
+## Finance Products vs. Finance Fees
+
+| | `/context/finance-products` | `/finance/fees` |
+|---|---|---|
+| **Purpose** | Lender program enrichment and comparison | Quote-safe dealer-fee rows for calculation |
+| **`quote_safe`** | Mixed — check per record | Always `true` |
+| **Dealer fee fields** | Ranges (`min`/`max`) | Exact `fee_percentage` |
+| **Rate fields** | APR range (`apr_min`/`apr_max`) | Exact `interest_rate` |
+| **Best for** | CRM display, product comparison, eligibility checks | Quoting engines, proposal builders |
+
+<Tip>
+  Use the `measure` filter to pre-screen which lender products support a specific installation type (e.g. `battery_storage`, `heat_pump`) before fetching exact fee rows from `/api/v1/finance/fees`.
+</Tip>
+
+## Error Reference
+
+| Status | Cause |
+|--------|-------|
+| `400`  | Invalid `trade`, `product_type`, `quote_safe`, or `state` parameter value. |
+| `401`  | Missing or invalid `x-api-key` header. |
+| `403`  | Your key does not have access to the `finance_products` dataset. |
+| `500`  | Internal server error. |

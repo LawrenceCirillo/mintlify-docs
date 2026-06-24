@@ -1,0 +1,312 @@
+---
+title: "GET /api/v1/context/finance-eligibility — Eligibility Records"
+sidebarTitle: "Finance Eligibility"
+description: "Retrieve scoped lender and PACE eligible-product records with permit requirements, term limits, and county-level criteria for home-service financing workflows."
+---
+
+The `/api/v1/context/finance-eligibility` endpoint returns eligible-product records from the `finance_eligibility` dataset. Each record describes which specific product types and measures a lender or PACE program makes available in a given state, county, or scope — including whether a permit is required, what the maximum term is, and the availability status. Records are granular by design: a single program may produce multiple rows, one per `criteria_scope` (e.g. `hillsborough_county`, `sarasota_county`, `all_other_counties`).
+
+<Note>
+  Eligibility records sourced from contractor-uploaded PDFs carry `quote_safe: false` until an official public source or admin review approves them. Use the `quote_safe` filter or always inspect the field on each record before building proposal logic from it.
+</Note>
+
+## Endpoint
+
+```
+GET https://homeservicedata.com/api/v1/context/finance-eligibility
+```
+
+## Request
+
+### Headers
+
+<ParamField header="x-api-key" type="string" required>
+  Your API key. Obtain or rotate keys in your [dashboard](https://homeservicedata.com/dashboard).
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="trade" type="string">
+  Filter by trade category (case-insensitive). Accepted values: `solar`, `hvac`, `roofing`, `plumbing`, `electrical`. Returns `400` for unrecognized values.
+</ParamField>
+
+<ParamField query="state" type="string">
+  Two-letter state code (e.g. `GA`, `FL`). Filters on `state_code` (exact match, case-insensitive). Returns `400` for values that are not a two-letter code.
+</ParamField>
+
+<ParamField query="measure" type="string">
+  Slugified measure key to filter on (e.g. `solar_panels`, `heat_pump`). Matched against `measure_key` using exact slug equality.
+</ParamField>
+
+<ParamField query="financier" type="string">
+  Financier slug or name. Slugified and matched against `financier_slug` (exact).
+</ParamField>
+
+<ParamField query="program_type" type="string">
+  Filter by program type. Accepted values: `pace`, `loan`, `lease`, `home_improvement_loan`, `rebate`, `unknown`.
+</ParamField>
+
+<ParamField query="county" type="string">
+  County name used to resolve `criteria_scope`. Records with `criteria_scope` matching the county key are returned, along with `all_other_counties` records for non-specifically-scoped counties. See [criteria_scope](#understanding-criteria_scope) below.
+</ParamField>
+
+<ParamField query="product" type="string">
+  Substring match against `product_label` (case-insensitive). Useful for narrowing to a specific product name within a program.
+</ParamField>
+
+<ParamField query="quote_safe" type="boolean">
+  Pass `true` to return only verified eligibility records; `false` for unverified context only. Omit to return all.
+</ParamField>
+
+<ParamField query="limit" type="integer">
+  Maximum number of records to return. Defaults to `100`; hard cap is `500`.
+</ParamField>
+
+## Understanding `criteria_scope`
+
+`criteria_scope` encodes the geographic resolution of each eligibility rule. A single program often publishes different product availability or term limits by county, so a program with statewide coverage in Florida might have three records:
+
+| `criteria_scope` | Meaning |
+|---|---|
+| `hillsborough_county` | Rule applies specifically to Hillsborough County |
+| `sarasota_county` | Rule applies specifically to Sarasota County |
+| `all_other_counties` | Rule applies to every other county in the state |
+
+When you pass the `county` query parameter, the API resolves the county name to a scope key and returns matching records. Unrecognized county names are resolved to `all_other_counties`. If no `county` is passed, records for all scopes are returned.
+
+## Response
+
+A successful response returns `data.records` (the eligibility rows), `data.coverage` (filter summary), and a `usage` block.
+
+### Response Fields
+
+<ResponseField name="data.records" type="array">
+  Array of finance eligibility records, ordered by `trade_category`, `product_label`, and `criteria_scope` ascending.
+
+  <Expandable title="FinanceEligibilityRecord fields">
+    <ResponseField name="id" type="string">
+      Stable UUID for this eligibility record.
+    </ResponseField>
+
+    <ResponseField name="source_document_id" type="string | null">
+      ID of the source document this record was extracted from.
+    </ResponseField>
+
+    <ResponseField name="financier_name" type="string">
+      Display name of the lender or PACE administrator.
+    </ResponseField>
+
+    <ResponseField name="financier_slug" type="string">
+      URL-safe lender identifier. Pass this value in the `financier` query parameter.
+    </ResponseField>
+
+    <ResponseField name="program_name" type="string">
+      Full name of the finance program (e.g. `PACE Florida`, `GoodLeap HVAC Loan`).
+    </ResponseField>
+
+    <ResponseField name="program_type" type="string">
+      Program category: `pace`, `loan`, `lease`, `home_improvement_loan`, `rebate`, or `unknown`.
+    </ResponseField>
+
+    <ResponseField name="trade_category" type="string">
+      Trade this eligibility record applies to: `solar`, `hvac`, `roofing`, `plumbing`, or `electrical`.
+    </ResponseField>
+
+    <ResponseField name="measure_key" type="string | null">
+      Slugified measure identifier this record applies to (e.g. `solar_panels`, `battery_storage`, `heat_pump`). `null` if the record applies to all measures within the trade.
+    </ResponseField>
+
+    <ResponseField name="product_type" type="string | null">
+      Product type sub-classification within the program (e.g. `pace`, `loan`).
+    </ResponseField>
+
+    <ResponseField name="product_label" type="string | null">
+      Human-readable label for the product as written in the source document.
+    </ResponseField>
+
+    <ResponseField name="criteria_scope" type="string | null">
+      Geographic scope of this eligibility rule. One of: a county slug (e.g. `hillsborough_county`), `all_other_counties`, or `null` for statewide/unconstrained rules. See [Understanding criteria_scope](#understanding-criteria_scope).
+    </ResponseField>
+
+    <ResponseField name="state_code" type="string | null">
+      Two-letter state code where this eligibility rule applies.
+    </ResponseField>
+
+    <ResponseField name="county_name" type="string | null">
+      Raw county name from the source document, if county-specific. `null` for statewide records.
+    </ResponseField>
+
+    <ResponseField name="eligibility_criteria" type="object | null">
+      Structured criteria extracted from the source (e.g. property type, ownership requirements, income limits).
+    </ResponseField>
+
+    <ResponseField name="permit_required" type="boolean | null">
+      Whether a permit is required to use this financing product for the measure. `null` if not stated in the source.
+    </ResponseField>
+
+    <ResponseField name="max_term_years" type="number | null">
+      Maximum financing term in years for this product/measure combination.
+    </ResponseField>
+
+    <ResponseField name="availability_status" type="string | null">
+      Current availability of this product in the scoped area: e.g. `available`, `suspended`, `limited`.
+    </ResponseField>
+
+    <ResponseField name="quote_safe" type="boolean">
+      `true` if this record has passed verification review. Always inspect this field before building proposal logic.
+    </ResponseField>
+
+    <ResponseField name="confidence" type="string | null">
+      Data confidence tier: `high`, `medium`, or `low`.
+    </ResponseField>
+
+    <ResponseField name="effective_date" type="string | null">
+      ISO 8601 date when this eligibility rule became effective.
+    </ResponseField>
+
+    <ResponseField name="expires_at" type="string | null">
+      ISO 8601 datetime after which this eligibility record expires.
+    </ResponseField>
+
+    <ResponseField name="last_verified_at" type="string">
+      ISO 8601 datetime of the most recent source verification.
+    </ResponseField>
+
+    <ResponseField name="source_url" type="string | null">
+      URL of the source document or page.
+    </ResponseField>
+
+    <ResponseField name="unresolved_requirements" type="string[] | null">
+      Requirement statements from the source that could not be parsed into structured fields.
+    </ResponseField>
+
+    <ResponseField name="source_title" type="string | null">
+      Human-readable title of the source document.
+    </ResponseField>
+
+    <ResponseField name="source_kind" type="string | null">
+      Provenance category: e.g. `official_lender_doc`, `contractor_upload`, `web_scrape`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="data.coverage" type="object">
+  Summary of filters applied to this request.
+
+  <Expandable title="coverage fields">
+    <ResponseField name="trade" type="string">Applied trade filter, or `"all"`.</ResponseField>
+    <ResponseField name="state" type="string | null">Applied state filter (uppercased), or `null`.</ResponseField>
+    <ResponseField name="county" type="string | null">Applied county filter, or `null`.</ResponseField>
+    <ResponseField name="financier" type="string | null">Applied financier filter, or `null`.</ResponseField>
+    <ResponseField name="program_type" type="string">Applied program type filter, or `"all"`.</ResponseField>
+    <ResponseField name="measure" type="string | null">Applied measure filter, or `null`.</ResponseField>
+    <ResponseField name="product" type="string | null">Applied product substring filter, or `null`.</ResponseField>
+    <ResponseField name="returned" type="integer">Number of records in this response after all filters.</ResponseField>
+    <ResponseField name="source" type="string">The dataset key that backed this response: `finance_eligibility`.</ResponseField>
+    <ResponseField name="quote_safe_rule" type="string">Explanation of `quote_safe` semantics for this endpoint.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://homeservicedata.com/api/v1/context/finance-eligibility \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "trade=hvac" \
+  --data-urlencode "state=GA"
+```
+
+```python Python
+import requests
+
+resp = requests.get(
+    "https://homeservicedata.com/api/v1/context/finance-eligibility",
+    headers={"x-api-key": "YOUR_API_KEY"},
+    params={"trade": "hvac", "state": "GA"},
+)
+records = resp.json()["data"]["records"]
+```
+
+```javascript JavaScript
+const res = await fetch(
+  "https://homeservicedata.com/api/v1/context/finance-eligibility?trade=hvac&state=GA",
+  { headers: { "x-api-key": "YOUR_API_KEY" } }
+);
+const { records } = (await res.json()).data;
+```
+
+</CodeGroup>
+
+### Example Response
+
+```json
+{
+  "data": {
+    "records": [
+      {
+        "id": "elig_001bbb",
+        "source_document_id": "src_ga_pace_001",
+        "financier_name": "Ygrene Energy Fund",
+        "financier_slug": "ygrene_energy_fund",
+        "program_name": "Ygrene PACE Georgia",
+        "program_type": "pace",
+        "trade_category": "hvac",
+        "measure_key": "heat_pump",
+        "product_type": "pace",
+        "product_label": "Ygrene PACE — Heat Pump",
+        "criteria_scope": "all_other_counties",
+        "state_code": "GA",
+        "county_name": null,
+        "eligibility_criteria": {
+          "property_type": ["residential", "commercial"],
+          "ownership_required": true
+        },
+        "permit_required": true,
+        "max_term_years": 25,
+        "availability_status": "available",
+        "quote_safe": true,
+        "confidence": "high",
+        "effective_date": "2023-06-01",
+        "expires_at": null,
+        "last_verified_at": "2024-10-05T14:00:00.000Z",
+        "source_url": "https://ygrene.com/contractors/georgia",
+        "unresolved_requirements": null,
+        "source_title": "Ygrene Georgia Contractor Program Guide",
+        "source_kind": "official_lender_doc"
+      }
+    ],
+    "coverage": {
+      "trade": "hvac",
+      "state": "GA",
+      "county": null,
+      "financier": null,
+      "program_type": "all",
+      "measure": null,
+      "product": null,
+      "returned": 1,
+      "source": "finance_eligibility",
+      "quote_safe_rule": "Eligibility lists from contractor-uploaded PDFs are context until an official public/current source or admin approval marks them quote-safe."
+    }
+  },
+  "usage": {
+    "endpoint": "/api/v1/context/finance-eligibility",
+    "status_code": 200,
+    "duration_ms": 52
+  }
+}
+```
+
+## Error Reference
+
+| Status | Cause |
+|--------|-------|
+| `400`  | Invalid `trade`, `program_type`, `quote_safe`, or `state` parameter value. |
+| `401`  | Missing or invalid `x-api-key` header. |
+| `403`  | Your key does not have access to the `finance_eligibility` dataset. |
+| `500`  | Internal server error. |
+
+<Tip>
+  Combine `state`, `trade`, and `measure` to scope eligibility records to a single job type (e.g. HVAC heat pumps in Georgia). Then cross-reference `financier_slug` with `/api/v1/context/finance-products` to pull the matching program's APR ranges and loan limits in one workflow.
+</Tip>

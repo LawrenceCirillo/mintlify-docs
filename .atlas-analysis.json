@@ -1,0 +1,153 @@
+{
+  "projectType": "saas",
+  "projectName": "Home Service Data",
+  "projectDescription": "A vertical data API platform delivering curated, source-verified datasets—finance programs, solar/HVAC equipment specs, incentives, utility context, and pricing—for home-service quoting tools, CRMs, and workflow systems.",
+  "theme": "luma",
+  "primaryColor": "#0404d3",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "authentication"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/data-packets",
+              "concepts/quote-safe",
+              "concepts/access-levels",
+              "concepts/sync-model"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/quoting-tools",
+              "guides/crm-integration",
+              "guides/sync-integration",
+              "guides/webhooks",
+              "guides/compare-hub"
+            ]
+          },
+          {
+            "group": "Dashboard",
+            "pages": [
+              "dashboard/catalog",
+              "dashboard/playground",
+              "dashboard/api-keys"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/overview",
+              "api-reference/errors"
+            ]
+          },
+          {
+            "group": "Search & Catalog",
+            "pages": [
+              "api-reference/search",
+              "api-reference/catalog-equipment"
+            ]
+          },
+          {
+            "group": "Finance",
+            "pages": [
+              "api-reference/finance-fees",
+              "api-reference/finance-products",
+              "api-reference/finance-eligibility",
+              "api-reference/finance-pricing"
+            ]
+          },
+          {
+            "group": "Equipment & Hardware",
+            "pages": [
+              "api-reference/hardware-inverters",
+              "api-reference/benchmarks"
+            ]
+          },
+          {
+            "group": "Context Datasets",
+            "pages": [
+              "api-reference/context-hvac",
+              "api-reference/context-incentives",
+              "api-reference/context-climate",
+              "api-reference/context-utility-territory",
+              "api-reference/context-electricity-rates",
+              "api-reference/context-labor",
+              "api-reference/context-permits",
+              "api-reference/context-roofing",
+              "api-reference/context-ahri"
+            ]
+          },
+          {
+            "group": "Composite",
+            "pages": [
+              "api-reference/quote-context"
+            ]
+          },
+          {
+            "group": "Sync",
+            "pages": [
+              "api-reference/sync-snapshot",
+              "api-reference/sync-changes"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Quote-safe data quality contracts — every row is marked whether it is safe to use in a quote or context-only",
+    "Unified data catalog for solar, HVAC, roofing, finance, and utility datasets",
+    "Scoped API keys with per-dataset entitlements (sample, sandbox, production access levels)",
+    "Snapshot + delta sync with versioned cursors and webhook notifications on dataset updates",
+    "Composite /quote-context endpoint bundling finance, equipment, incentives, labor, permits, and utility resolution",
+    "Compare Hub for side-by-side comparisons of finance programs, solar modules/inverters, and HVAC equipment",
+    "API Playground for testing endpoints within the dashboard without writing code",
+    "Utility territory resolver with Census geocoding, NREL hints, and PostGIS polygon matching",
+    "Benchmarks endpoint for statistical distribution context on dealer fees, inverter costs, and interest rates",
+    "Source provenance on every record — source URL, review status, last verified date, and confidence level"
+  ],
+  "publicApiSurface": [
+    "GET /api/v1/search?q=&trade=&type=&quote_safe=&limit=",
+    "GET /api/v1/catalog/equipment?trade=&category=&manufacturer=&sku=",
+    "GET /api/v1/finance/fees?trade=&financier=&payment_type=&term_months=",
+    "GET /api/v1/pricing/finance",
+    "GET /api/v1/context/finance-products",
+    "GET /api/v1/context/finance-eligibility?trade=&state=&measure=",
+    "GET /api/v1/hardware/inverters",
+    "GET /api/v1/benchmarks?metric=dealer_fee|inverter_base_cost|inverter_price_per_watt|interest_rate",
+    "GET /api/v1/context/hvac",
+    "GET /api/v1/context/incentives?trade=&state=&utility=&measure=",
+    "GET /api/v1/context/climate?state=&county=&county_fips=",
+    "GET /api/v1/context/utility-territory?state=&city=&utility=&lat=&lng=&quote_safe=",
+    "GET /api/v1/context/utility-territory/resolve?address=",
+    "GET /api/v1/context/electricity-rates?state=",
+    "GET /api/v1/context/labor?trade=",
+    "GET /api/v1/context/labor-adders?trade=",
+    "GET /api/v1/context/permits?trade=&state=&county=&city=",
+    "GET /api/v1/context/roofing",
+    "GET /api/v1/context/ahri-matches?equipment_id=",
+    "GET /api/v1/context/pricing?trade=&equipment_category=",
+    "GET /api/v1/quote-context?trade=&state=&county=&measure=&address=&equipment_id=",
+    "GET /api/v1/sync/snapshot?dataset=&trade=&limit=",
+    "GET /api/v1/sync/changes?dataset=&since=&trade=&limit=",
+    "GET /api/v1/price-history"
+  ]
+}

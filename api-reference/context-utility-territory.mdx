@@ -1,0 +1,305 @@
+---
+title: "GET /api/v1/context/utility-territory — Lookup API"
+sidebarTitle: "Utility Territory"
+description: "Browse utility service territories by state, city, or coordinates, or resolve a postal address to its utility provider with quote-safe confidence."
+---
+
+The utility territory endpoints let you look up which electric utility serves a given location. The **browse** endpoint (`GET /api/v1/context/utility-territory`) returns territory records you can filter by state, city, utility name, or lat/lng coordinates. The **resolve** endpoint (`GET /api/v1/context/utility-territory/resolve`) accepts a full postal address, geocodes it, and returns the best-matched service territory records ordered by confidence. Quote-safe territory resolution requires polygon-level coverage to be loaded for the target area — records backed only by sample-point context return with `quote_safe: false`.
+
+---
+
+## Browse Utility Territories
+
+```
+GET https://homeservicedata.com/api/v1/context/utility-territory
+```
+
+Use this endpoint to explore which utilities operate in a state or city, or to find territories near a GPS coordinate.
+
+### Query Parameters
+
+<ParamField query="state" type="string">
+  Two-letter state code (e.g., `CA`, `FL`). Case-insensitive.
+</ParamField>
+
+<ParamField query="city" type="string">
+  City name. Partial match, case-insensitive.
+</ParamField>
+
+<ParamField query="utility" type="string">
+  Utility provider name or slug. Partial match on name, exact match on slug.
+</ParamField>
+
+<ParamField query="lat" type="number">
+  Latitude in decimal degrees. When combined with `lng`, results are sorted by distance from this point.
+</ParamField>
+
+<ParamField query="lng" type="number">
+  Longitude in decimal degrees. Must be supplied together with `lat`.
+</ParamField>
+
+<ParamField query="quote_safe" type="boolean">
+  When `true`, returns only records verified for quote-safe territory assignment.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="100">
+  Maximum number of records to return. Capped at `500`.
+</ParamField>
+
+### Response Fields
+
+<ResponseField name="records" type="array">
+  Array of utility territory objects.
+
+  <Expandable title="Record fields">
+    <ResponseField name="record_id" type="string">Unique record identifier.</ResponseField>
+
+    <ResponseField name="utility" type="object">
+      Provider-level details for the utility.
+      <Expandable title="utility fields">
+        <ResponseField name="id" type="string">Internal utility provider ID.</ResponseField>
+        <ResponseField name="name" type="string | null">Utility display name (e.g., `Pacific Gas and Electric`).</ResponseField>
+        <ResponseField name="slug" type="string | null">Normalized slug (e.g., `pacific-gas-and-electric`).</ResponseField>
+        <ResponseField name="eia_utility_id" type="string | null">EIA utility identifier.</ResponseField>
+        <ResponseField name="provider_type" type="string">Provider type: `iou`, `municipal`, `cooperative`, `federal`, or `unknown`.</ResponseField>
+        <ResponseField name="state_codes" type="array">List of state codes the utility operates in.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="geography" type="object">
+      Geographic coverage details for this territory record.
+      <Expandable title="geography fields">
+        <ResponseField name="state_code" type="string">State code for this territory.</ResponseField>
+        <ResponseField name="county_name" type="string | null">County name, if territory is county-scoped.</ResponseField>
+        <ResponseField name="county_fips" type="string | null">5-digit county FIPS code.</ResponseField>
+        <ResponseField name="city_name" type="string | null">City name, if territory is city-scoped.</ResponseField>
+        <ResponseField name="zip_code" type="string | null">ZIP code, if territory is ZIP-scoped.</ResponseField>
+        <ResponseField name="coverage_level" type="string">Granularity of this record: `state`, `county`, `city`, `zip`, or `polygon`.</ResponseField>
+        <ResponseField name="sample_lat" type="number | null">Representative latitude for the coverage area.</ResponseField>
+        <ResponseField name="sample_lng" type="number | null">Representative longitude for the coverage area.</ResponseField>
+        <ResponseField name="sample_address" type="string | null">Example address within the territory.</ResponseField>
+        <ResponseField name="distance_miles" type="number | null">Distance in miles from the supplied `lat`/`lng` to the sample point. `null` if coordinates were not supplied.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="territory_notes" type="string | null">Free-text notes about boundary edge cases or service conditions.</ResponseField>
+    <ResponseField name="geometry_status" type="string | null">Status of polygon geometry loading: `loaded`, `pending`, `unavailable`.</ResponseField>
+    <ResponseField name="quote_safe" type="boolean">Whether this record meets the threshold for use in customer-facing quotes.</ResponseField>
+    <ResponseField name="confidence" type="string | null">Confidence tier: `high`, `medium`, or `low`.</ResponseField>
+
+    <ResponseField name="provenance" type="object">
+      Source traceability fields.
+      <Expandable title="provenance fields">
+        <ResponseField name="source_document_id" type="string | null">Internal source document reference.</ResponseField>
+        <ResponseField name="source_url" type="string | null">Source data URL.</ResponseField>
+        <ResponseField name="provider_source_url" type="string | null">URL to the utility's own territory map or data page.</ResponseField>
+        <ResponseField name="last_verified_at" type="string | null">ISO 8601 timestamp of last verification.</ResponseField>
+        <ResponseField name="trust_basis" type="string">Always `utility_territory_context`.</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="coverage" type="object">
+  Query summary metadata.
+  <Expandable title="Coverage fields">
+    <ResponseField name="records_returned" type="integer">Number of records returned.</ResponseField>
+    <ResponseField name="state" type="string | null">State filter applied.</ResponseField>
+    <ResponseField name="city" type="string | null">City filter applied.</ResponseField>
+    <ResponseField name="utility" type="string | null">Utility filter applied.</ResponseField>
+    <ResponseField name="coordinates_used" type="boolean">Whether lat/lng sorting was applied.</ResponseField>
+    <ResponseField name="quote_safe_only" type="boolean">Whether results were restricted to quote-safe records.</ResponseField>
+    <ResponseField name="trust_basis" type="string">Description of the trust model for this dataset.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Resolve Utility Territory from Address
+
+```
+GET https://homeservicedata.com/api/v1/context/utility-territory/resolve
+```
+
+Geocodes a postal address and returns the best-matched utility territory records. This endpoint performs a live geocode lookup when the address is not already in the resolver cache, so it counts against your resolve budget.
+
+<Note>
+  The resolve endpoint has a **per-key resolve budget** in addition to the standard rate limit. Each live geocode call (cache miss) decrements your budget. Cached responses (indicated by `X-HSD-Cache: hit`) do not consume budget. Contact support to increase your resolve quota.
+</Note>
+
+### Query Parameters
+
+<ParamField query="address" type="string" required>
+  Full postal address to resolve (e.g., `1600 Pennsylvania Ave NW, Washington, DC 20500`). Maximum 300 characters. Must be a postal address, not a URL or coordinate string.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="5">
+  Maximum number of matched territory records to return. Capped at `10`.
+</ParamField>
+
+### Response Headers
+
+| Header | Description |
+|--------|-------------|
+| `X-HSD-Cache` | `hit` if the geocode result was served from cache, `miss` otherwise. |
+| `X-HSD-Resolution-Mode` | `cached` or `live` — mirrors cache status. |
+
+### Response Fields
+
+The response body is the full resolution object returned by the utility territory resolver. Key top-level fields:
+
+<ResponseField name="geocode" type="object">
+  Geocoding result for the submitted address.
+  <Expandable title="geocode fields">
+    <ResponseField name="matched" type="boolean">Whether the address was successfully geocoded.</ResponseField>
+    <ResponseField name="normalized_address" type="string | null">Canonical form of the address returned by the geocoder.</ResponseField>
+    <ResponseField name="lat" type="number | null">Geocoded latitude.</ResponseField>
+    <ResponseField name="lng" type="number | null">Geocoded longitude.</ResponseField>
+    <ResponseField name="confidence" type="string | null">Geocode confidence: `rooftop`, `range_interpolated`, `geometric_center`, or `approximate`.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="territories" type="array">
+  Ordered list of matched utility territory records. Structure mirrors the browse endpoint records.
+</ResponseField>
+
+<ResponseField name="resolution_method" type="string | null">
+  Method used to match the geocoded point to territories (e.g., `polygon_lookup`, `sample_point_nearest`).
+</ResponseField>
+
+<Warning>
+  A `422` status is returned when the address could not be geocoded. This still counts as a resolve attempt. Validate addresses client-side before calling this endpoint at scale.
+</Warning>
+
+## Example Requests
+
+<CodeGroup>
+
+```bash Browse by State
+curl -G https://homeservicedata.com/api/v1/context/utility-territory \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "state=CA" \
+  --data-urlencode "city=San Jose" \
+  --data-urlencode "quote_safe=true" \
+  --data-urlencode "limit=5"
+```
+
+```bash Resolve Address
+curl -G "https://homeservicedata.com/api/v1/context/utility-territory/resolve" \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "address=1600 Pennsylvania Ave NW, Washington, DC 20500" \
+  --data-urlencode "limit=3"
+```
+
+</CodeGroup>
+
+## Example Responses
+
+<CodeGroup>
+
+```json Browse Response
+{
+  "success": true,
+  "data": {
+    "records": [
+      {
+        "record_id": "utl_01hzka1bc2de3fg4hi5jk6mnop",
+        "utility": {
+          "id": "prv_01hzka1bc2de3fg4hi5abcde",
+          "name": "Pacific Gas and Electric",
+          "slug": "pacific-gas-and-electric",
+          "eia_utility_id": "14328",
+          "provider_type": "iou",
+          "state_codes": ["CA"]
+        },
+        "geography": {
+          "state_code": "CA",
+          "county_name": "Santa Clara",
+          "county_fips": "06085",
+          "city_name": "San Jose",
+          "zip_code": null,
+          "coverage_level": "city",
+          "sample_lat": 37.3382,
+          "sample_lng": -121.8863,
+          "sample_address": "100 W Santa Clara St, San Jose, CA 95113",
+          "distance_miles": null
+        },
+        "territory_notes": null,
+        "geometry_status": "loaded",
+        "quote_safe": true,
+        "confidence": "high",
+        "provenance": {
+          "source_document_id": "doc_01hzka1bc2de3fg4hi5xyz",
+          "source_url": "https://www.pge.com/en_US/residential/home.page",
+          "provider_source_url": "https://www.pge.com/maps",
+          "last_verified_at": "2024-10-01T00:00:00Z",
+          "trust_basis": "utility_territory_context"
+        }
+      }
+    ],
+    "coverage": {
+      "records_returned": 1,
+      "state": "CA",
+      "city": "San Jose",
+      "utility": null,
+      "coordinates_used": false,
+      "quote_safe_only": true,
+      "trust_basis": "Sample-point utility context from NREL; polygon service territories must be loaded before quote-safe address resolution."
+    }
+  }
+}
+```
+
+```json Resolve Response
+{
+  "success": true,
+  "data": {
+    "geocode": {
+      "matched": true,
+      "normalized_address": "1600 Pennsylvania Ave NW, Washington, DC 20500, USA",
+      "lat": 38.8977,
+      "lng": -77.0366,
+      "confidence": "rooftop"
+    },
+    "territories": [
+      {
+        "record_id": "utl_01hzka1bc2de3fg4hi5jk6dcde",
+        "utility": {
+          "id": "prv_01hzka1bc2de3fg4hi5dcdce",
+          "name": "Pepco",
+          "slug": "pepco",
+          "eia_utility_id": "13781",
+          "provider_type": "iou",
+          "state_codes": ["DC", "MD"]
+        },
+        "geography": {
+          "state_code": "DC",
+          "county_name": null,
+          "county_fips": null,
+          "city_name": "Washington",
+          "zip_code": "20500",
+          "coverage_level": "polygon",
+          "sample_lat": 38.8977,
+          "sample_lng": -77.0366,
+          "sample_address": null,
+          "distance_miles": 0.0
+        },
+        "territory_notes": null,
+        "geometry_status": "loaded",
+        "quote_safe": true,
+        "confidence": "high",
+        "provenance": {
+          "source_document_id": "doc_01hzka1bc2de3fg4hi5dcxyz",
+          "source_url": "https://www.pepco.com",
+          "provider_source_url": "https://www.pepco.com/home/serviceterritories",
+          "last_verified_at": "2024-09-15T00:00:00Z",
+          "trust_basis": "utility_territory_context"
+        }
+      }
+    ],
+    "resolution_method": "polygon_lookup"
+  }
+}
+```
+
+</CodeGroup>

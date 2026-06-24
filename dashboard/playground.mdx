@@ -1,0 +1,92 @@
+---
+title: "Test API Calls in the Home Service Data Playground"
+sidebarTitle: "Playground"
+description: "Use the Playground to run live API calls, inspect responses, diagnose key scopes and entitlements, and copy ready-to-use curl or fetch requests."
+---
+
+The API Playground is an in-browser API console built directly into the Home Service Data dashboard. You can select any packet you have access to, fill in query parameters, fire a real authenticated request, and inspect the full response — all without leaving the dashboard or writing a line of integration code. The Playground is the fastest way to validate that your entitlement is active, your parameters are correct, and the data matches what your application expects before you start building.
+
+## Workflow Overview
+
+<Steps>
+  <Step title="Open the Playground">
+    Navigate to [https://homeservicedata.com/dashboard](https://homeservicedata.com/dashboard) and select **Playground** from the left sidebar.
+  </Step>
+  <Step title="Select a packet">
+    Use the packet selector at the top of the Playground to choose the dataset you want to test — for example, *Finance Fee Records* or *HVAC AHRI Match Context*. Selecting a packet filters the endpoint list to only the routes that belong to that dataset, keeping the interface focused.
+  </Step>
+  <Step title="Choose an endpoint">
+    Pick the specific endpoint you want to call from the filtered list. The Playground displays the versioned path (e.g., `/api/v1/finance/fees`) alongside a short description pulled from the Catalog so you always know what you are targeting.
+  </Step>
+  <Step title="Fill in parameters">
+    Complete the parameter form. Required fields are marked and the Playground validates types before sending. Optional filters — such as trade category, state, or limit — are available where the endpoint supports them.
+  </Step>
+  <Step title="Run the request">
+    Click **Send**. The Playground authenticates the call using the API key associated with your current session (or a key you select from your workspace) and fires the request against the live API.
+  </Step>
+  <Step title="Inspect the response">
+    The response panel shows the HTTP status code, latency, full JSON body, and any error details. You can expand nested objects, search within the response, and compare the output against the schema documented in the Catalog.
+  </Step>
+</Steps>
+
+## Packet-Based Console
+
+Selecting a packet in the Playground does more than filter the endpoint list — it loads the full context for that dataset, including its trust rules, quote-safe status, and the access level your workspace holds. This keeps the console focused: you see only the endpoints relevant to the data you are working with, and the entitlement panel on the right reflects exactly what your key can do with that packet.
+
+<Note>
+  If you navigate to the Playground from a **Try in Playground** link in the [Data Catalog](/dashboard/catalog), the packet and endpoint are pre-selected for you. You only need to fill in parameters and run.
+</Note>
+
+## Entitlement Diagnosis
+
+The Playground surfaces your access status for the selected dataset so you can diagnose permission issues before they reach production. For every packet and endpoint combination you test, the Playground shows:
+
+- **Your current entitlement level** for this packet (none, sample, sandbox, or production)
+- **Whether the selected endpoint is accessible** at your entitlement level
+- **The maximum record limit** your access level permits for this call
+
+If your entitlement level is `none` for the selected packet, the Playground blocks the send and displays a prompt to request access from the [Data Catalog](/dashboard/catalog). If your level is `sample` or `sandbox`, the Playground notes the restriction alongside the response so you understand any data-coverage limitations in the result.
+
+## API Key Scope Diagnosis
+
+In addition to entitlement, the Playground shows which **API key scopes** apply to the key you are using for the selected endpoint. Because keys can be scoped to specific datasets and access levels — independent of your organization's overall entitlement — it is possible for a key to have narrower permission than your workspace holds.
+
+The scope panel tells you:
+
+- **Which datasets this key is scoped to** — keys scoped to a subset of packets will show a restricted list
+- **The access level configured on this key** for the selected dataset (none, sample, sandbox, or production)
+- **Whether the key's scope is the limiting factor** — if your workspace entitlement is `production` but the key is scoped to `sandbox`, the Playground flags the key as the constraint
+
+This diagnosis saves debugging time: instead of guessing why a production call is returning sample-sized results, you can see immediately whether the key scope is the ceiling.
+
+## Copying Requests
+
+Once you have a working call, the Playground lets you copy it in two formats:
+
+<CardGroup cols={2}>
+  <Card title="cURL" icon="terminal">
+    A ready-to-paste `curl` command with your authentication header, query parameters, and endpoint URL. Use this to test from the command line or share a repro case with your team.
+  </Card>
+  <Card title="Fetch" icon="code">
+    A JavaScript `fetch` snippet using the same parameters. Drop it directly into your integration code or a quick proof-of-concept script.
+  </Card>
+</CardGroup>
+
+Both formats include your actual parameter values, so the copied request runs exactly as you tested it. Replace the API key value with an environment variable before committing any code that includes a copied snippet.
+
+<Warning>
+  Copied requests include the API key used during the Playground session. Never paste a snippet with a real key into version control, a public forum, or a shared document. Swap the key value for an environment variable reference immediately.
+</Warning>
+
+## Validating Data Before Integration
+
+<Tip>
+  Run the Playground against every endpoint your application depends on before writing integration code. Confirm that the response shape matches your expectations, that quote-safe record counts are sufficient for your use case, and that your key's scope permits the access level your workflow requires. Catching a scope mismatch or schema surprise in the Playground is far cheaper than discovering it in a staging environment.
+</Tip>
+
+A useful pre-integration checklist in the Playground:
+
+1. Confirm the entitlement badge shows **production** (or the level your app requires) for every packet you plan to use.
+2. Verify the key you intend to deploy is scoped correctly — not wider than necessary, and not accidentally narrower.
+3. Check quote-safe coverage in the response: if your quoting tool requires all records to be quote-safe, verify the `quote_safe` field is `true` across the sample you receive.
+4. Copy the working `curl` or `fetch` snippet as your integration reference before closing the Playground session.

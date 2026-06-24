@@ -1,0 +1,100 @@
+---
+title: "Browse, Access, and Manage Datasets in the Data Catalog"
+sidebarTitle: "Data Catalog"
+description: "Use the Data Catalog to discover available datasets, review your access level, locate endpoint paths, and request upgrades for the packets your app needs."
+---
+
+The Data Catalog is the single place inside the Home Service Data dashboard where you discover every dataset the platform publishes, understand what your workspace can currently access, and initiate requests to unlock additional packets. Before you write a single API call, the Catalog lets you evaluate whether a dataset fits your use case and whether your current entitlement is sufficient.
+
+## What the Catalog Shows
+
+Every entry in the Catalog represents one **data packet** — an independently versioned, independently scoped dataset that maps to one or more API endpoints. Browsing the Catalog gives you a structured snapshot of the entire product surface.
+
+<CardGroup cols={2}>
+  <Card title="Dataset Name & Description" icon="database">
+    The canonical name and a plain-English description of what the packet contains — for example, *Finance Fee Records* (approved dealer-fee rows for quote tools) or *HVAC AHRI Match Context* (AHRI/ENERGY STAR matched-system records with license and quote-safe gates).
+  </Card>
+  <Card title="Access Status" icon="lock">
+    Your current entitlement level for this packet: **none**, **sample**, **sandbox**, or **production**. The status badge is calculated for your workspace, not globally, so two organizations can see different states for the same dataset.
+  </Card>
+  <Card title="Endpoint Path" icon="code">
+    The versioned API path associated with the packet — for example `/api/v1/finance/fees` or `/api/v1/context/ahri-matches` — so you can go straight from discovery to integration without hunting through the reference docs.
+  </Card>
+  <Card title="Trust Rules & Quote-Safe Coverage" icon="shield-check">
+    Whether records in this packet are marked quote-safe (safe to use in final proposal math) or context-only (suitable for background context but not as the source of truth for a customer-facing price). Quote-safe coverage is shown as a count so you know what portion of the packet you can use in production quoting flows.
+  </Card>
+</CardGroup>
+
+Each entry also exposes the **current dataset version** — the published snapshot identifier — and the **record count at last sync**, so you can gauge freshness before building a dependency.
+
+## Available Datasets
+
+The table below lists every packet currently published in the Catalog, its default endpoint, and its intended use.
+
+| Packet | Endpoint | Use |
+|---|---|---|
+| Finance Fee Records | `/api/v1/finance/fees` | Quote-safe dealer-fee and finance-program rows |
+| Finance Product Context | `/api/v1/context/finance-products` | Lender and program quick-fact context |
+| Finance Eligibility Records | `/api/v1/context/finance-eligibility` | Lender/PACE eligible-product records with permit and term data |
+| Equipment Price Observations | `/api/v1/context/pricing` | Published price observations with confidence and quote-safe flags |
+| Utility Territory | `/api/v1/context/utility-territory` | Utility providers and service-territory context |
+| Electricity Rate Context | `/api/v1/context/electricity-rates` | Regional electricity averages for market analysis |
+| HVAC Incentives | `/api/v1/context/incentives` | Program-level HVAC incentive records |
+| HVAC Climate Context | `/api/v1/context/climate` | County climate and weather-normal context for HVAC assumptions |
+| HVAC Labor Adders | `/api/v1/context/labor-adders` | Labor and material adder context with source basis |
+| HVAC AHRI Match Context | `/api/v1/context/ahri-matches` | AHRI/ENERGY STAR matched-system records with license gates |
+
+<Note>
+  Access is granted **per packet**, not globally. Receiving production access for one dataset does not automatically unlock others. Review each packet's access status individually before building an integration that depends on it.
+</Note>
+
+## Understanding Access Status
+
+Each packet displays one of four access levels for your workspace:
+
+- **none** — Your workspace has no entitlement for this packet. API calls against its endpoint will be rejected.
+- **sample** — You can retrieve a small, fixed sample of records. Useful for evaluating schema and field coverage before requesting broader access.
+- **sandbox** — You have access to a realistic but non-production slice of the dataset. Suitable for integration testing.
+- **production** — Full access to the current published snapshot, including all quote-safe records.
+
+If you need a higher level than your workspace currently holds, you can request an upgrade directly from the Catalog entry.
+
+## Requesting Access to a Dataset
+
+<Steps>
+  <Step title="Open the Data Catalog">
+    Navigate to [https://homeservicedata.com/dashboard](https://homeservicedata.com/dashboard) and select **Data Catalog** from the left sidebar.
+  </Step>
+  <Step title="Find the dataset you need">
+    Browse or search the Catalog to locate the packet. The access-status badge next to each entry tells you your current entitlement at a glance.
+  </Step>
+  <Step title="Open the dataset detail panel">
+    Click the dataset row to expand the detail panel. Here you see the full description, endpoint path, trust rules, quote-safe record count, version history, and your current access level.
+  </Step>
+  <Step title="Review trust rules and quote-safe coverage">
+    Before requesting access, confirm the packet's quote-safe status matches your intended use. If the packet is context-only, plan to use it for background enrichment rather than final quote math.
+  </Step>
+  <Step title="Request an upgrade">
+    If your current access level is insufficient, click **Request Access** and select the level you need (sample, sandbox, or production). Your request is routed to your account team for review.
+  </Step>
+  <Step title="Confirm the new status">
+    Once approved, return to the Catalog entry — the badge updates to reflect your new entitlement. You can then use the endpoint in your integration or test it immediately in the Playground.
+  </Step>
+</Steps>
+
+## Jumping to the Playground
+
+Every Catalog entry includes a **Try in Playground** link. Clicking it opens the [API Playground](/dashboard/playground) with that packet already selected and its endpoint pre-loaded. This lets you move from discovery to a live API test without copying endpoint paths or switching contexts.
+
+<Tip>
+  Use the Playground link in each Catalog entry as a first-pass validation step. Running a call there before writing integration code confirms your access level is active and shows you the exact response shape you will receive.
+</Tip>
+
+## Version and Coverage Information
+
+Each dataset entry surfaces two freshness signals:
+
+- **Dataset version** — A publish-time identifier that increments whenever the platform releases a new snapshot of that packet. Your integration can track this to detect when upstream data has changed.
+- **Record count** — The number of rows in the current published version, split into total records and quote-safe records where applicable.
+
+These fields help you reason about data quality and completeness before committing to a packet as a production dependency.

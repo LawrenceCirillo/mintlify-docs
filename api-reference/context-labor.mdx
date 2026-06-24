@@ -1,0 +1,283 @@
+---
+title: "GET /api/v1/context/labor — Labor Rates and Adders"
+sidebarTitle: "Labor"
+description: "Access BLS OEWS regional wage data by trade and occupation code, plus per-task labor adder ranges for HVAC, roofing, solar, and other home-service trades."
+---
+
+The labor endpoints provide two complementary datasets for building accurate cost models. **Regional labor rates** (`/api/v1/context/labor`) deliver BLS Occupational Employment and Wage Statistics (OEWS) wage distributions by trade, geography, and occupation code — all records in this dataset are `quote_safe: true`. **Labor adders** (`/api/v1/context/labor-adders`) provide per-task cost and labor-hour ranges for installation complexity factors (crane lifts, attic work, line sets, etc.) and carry their own `quote_safe` flags based on source determinism.
+
+---
+
+## Regional Labor Rates
+
+```
+GET https://homeservicedata.com/api/v1/context/labor
+```
+
+Returns BLS OEWS wage records for the specified trade and geography. Results default to the standard occupation code for the requested trade (HVAC: `49-9021`, Roofing: `47-2181`, Electrical: `47-2111`, Plumbing: `47-2152`, Solar: `47-2231`).
+
+### Query Parameters
+
+<ParamField query="trade" type="string" default="hvac">
+  Trade vertical. One of: `hvac`, `solar`, `roofing`, `plumbing`, `electrical`.
+</ParamField>
+
+<ParamField query="occupation_code" type="string">
+  BLS SOC occupation code override (e.g., `49-9021`). Overrides the default code for the selected trade.
+</ParamField>
+
+<ParamField query="region_type" type="string">
+  Filter by geographic aggregation. One of: `national`, `state`, `metro`, `nonmetro`.
+</ParamField>
+
+<ParamField query="state" type="string">
+  Two-letter state code (e.g., `TX`). Returns records where `state_code` matches.
+</ParamField>
+
+<ParamField query="region_code" type="string">
+  BLS area code for a specific metro or non-metro area (e.g., `C3518` for Dallas–Fort Worth).
+</ParamField>
+
+<ParamField query="data_year" type="integer">
+  Filter to a specific BLS survey year (e.g., `2023`). Must be a four-digit integer greater than `2000`.
+</ParamField>
+
+<ParamField query="include_states" type="boolean" default="false">
+  When `true`, state-level records are included alongside metro/non-metro records.
+</ParamField>
+
+<ParamField query="include_metros" type="boolean" default="false">
+  When `true`, metro area records are included alongside state records.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="100">
+  Maximum number of records to return. Capped at `500`.
+</ParamField>
+
+### Response Fields
+
+<ResponseField name="records" type="array">
+  Array of regional labor rate objects.
+
+  <Expandable title="Record fields">
+    <ResponseField name="record_id" type="string">Unique record identifier.</ResponseField>
+    <ResponseField name="trade" type="string">Trade category for this record.</ResponseField>
+    <ResponseField name="occupation_code" type="string">BLS SOC code (e.g., `49-9021`).</ResponseField>
+    <ResponseField name="occupation_title" type="string">BLS occupation title.</ResponseField>
+
+    <ResponseField name="region" type="object">
+      Geographic region for this record.
+      <Expandable title="region fields">
+        <ResponseField name="type" type="string">Region type: `national`, `state`, `metro`, or `nonmetro`.</ResponseField>
+        <ResponseField name="code" type="string">BLS area code.</ResponseField>
+        <ResponseField name="state_code" type="string | null">State code, if applicable.</ResponseField>
+        <ResponseField name="state_name" type="string | null">State name, if applicable.</ResponseField>
+        <ResponseField name="name" type="string">Human-readable region name.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="data_year" type="integer">BLS survey year.</ResponseField>
+    <ResponseField name="effective_period" type="string">Survey period label.</ResponseField>
+    <ResponseField name="employment" type="integer | null">Estimated employment count for this occupation in the region.</ResponseField>
+
+    <ResponseField name="wage_distribution" type="object">
+      BLS raw wage statistics.
+      <Expandable title="wage_distribution fields">
+        <ResponseField name="hourly_mean" type="number | null">Mean hourly wage.</ResponseField>
+        <ResponseField name="hourly_p10" type="number | null">10th percentile hourly wage.</ResponseField>
+        <ResponseField name="hourly_p25" type="number | null">25th percentile hourly wage.</ResponseField>
+        <ResponseField name="hourly_median" type="number | null">Median hourly wage.</ResponseField>
+        <ResponseField name="hourly_p75" type="number | null">75th percentile hourly wage.</ResponseField>
+        <ResponseField name="hourly_p90" type="number | null">90th percentile hourly wage.</ResponseField>
+        <ResponseField name="annual_median" type="integer | null">Median annual wage.</ResponseField>
+        <ResponseField name="employment_rse" type="number | null">Relative standard error of the employment estimate.</ResponseField>
+        <ResponseField name="wage_prse" type="number | null">Percent relative standard error of the wage estimate.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="loaded_labor" type="object">
+      Burden-adjusted labor cost rates for use in job costing.
+      <Expandable title="loaded_labor fields">
+        <ResponseField name="burden_multiplier" type="number | null">Labor burden multiplier applied to raw BLS wages.</ResponseField>
+        <ResponseField name="hourly_mean" type="number | null">Burden-loaded mean hourly cost.</ResponseField>
+        <ResponseField name="hourly_p25" type="number | null">Burden-loaded 25th percentile hourly cost.</ResponseField>
+        <ResponseField name="hourly_median" type="number | null">Burden-loaded median hourly cost.</ResponseField>
+        <ResponseField name="hourly_p75" type="number | null">Burden-loaded 75th percentile hourly cost.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="provenance" type="object">
+      Source traceability.
+      <Expandable title="provenance fields">
+        <ResponseField name="source_document_id" type="string | null">Internal source document reference.</ResponseField>
+        <ResponseField name="source_url" type="string | null">URL to BLS OEWS data source.</ResponseField>
+        <ResponseField name="burden_source_url" type="string | null">URL to burden rate source.</ResponseField>
+        <ResponseField name="last_verified_at" type="string">ISO 8601 timestamp of last verification.</ResponseField>
+        <ResponseField name="quote_safe" type="boolean">Always `true` for labor rate records.</ResponseField>
+        <ResponseField name="trust_basis" type="string">Always `published_labor_rate_source`.</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="coverage" type="object">
+  <Expandable title="Coverage fields">
+    <ResponseField name="trade" type="string">Trade filter applied.</ResponseField>
+    <ResponseField name="occupation_code" type="string">Occupation code used (default or explicit).</ResponseField>
+    <ResponseField name="source" type="string">Always `BLS OEWS`.</ResponseField>
+    <ResponseField name="latest_loaded_year" type="integer | null">Most recent data year in the response.</ResponseField>
+    <ResponseField name="quote_safe_only" type="boolean">Always `true` — all labor rate records are quote-safe.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Labor Adders
+
+```
+GET https://homeservicedata.com/api/v1/context/labor-adders
+```
+
+Returns per-task labor and material cost adders — complexity factors added on top of base labor rates to account for job-specific conditions such as attic installs, crane lifts, or extended line sets.
+
+### Query Parameters
+
+<ParamField query="trade" type="string" default="hvac">
+  Trade vertical. One of: `hvac`, `solar`, `roofing`, `plumbing`, `electrical`.
+</ParamField>
+
+<ParamField query="adder" type="string">
+  Adder key to retrieve a single adder (e.g., `crane_lift`, `attic_install`). Slugified before matching.
+</ParamField>
+
+<ParamField query="quote_safe" type="boolean">
+  Filter by quote-safe status. Omit to return all adders.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="100">
+  Maximum number of records to return. Capped at `500`.
+</ParamField>
+
+### Response Fields
+
+<ResponseField name="records" type="array">
+  Array of labor adder objects.
+
+  <Expandable title="Record fields">
+    <ResponseField name="record_id" type="string">Unique record identifier.</ResponseField>
+    <ResponseField name="trade" type="string">Trade category this adder applies to.</ResponseField>
+    <ResponseField name="adder_key" type="string">Normalized slug key for the adder (e.g., `crane_lift`).</ResponseField>
+    <ResponseField name="adder_label" type="string">Human-readable adder label.</ResponseField>
+    <ResponseField name="adder_group" type="string | null">Group or category the adder belongs to (e.g., `access`, `line_set`, `refrigerant`).</ResponseField>
+    <ResponseField name="unit" type="string | null">Unit of measure for this adder (e.g., `per_unit`, `per_foot`, `per_job`).</ResponseField>
+    <ResponseField name="amount_type" type="string | null">Whether the cost is a `flat_fee`, `range`, or `formula`.</ResponseField>
+
+    <ResponseField name="ranges" type="object">
+      Cost and labor-hour range estimates.
+      <Expandable title="ranges fields">
+        <ResponseField name="cost_low" type="number | null">Low end of total cost range in USD.</ResponseField>
+        <ResponseField name="cost_high" type="number | null">High end of total cost range in USD.</ResponseField>
+        <ResponseField name="labor_hours_low" type="number | null">Low end of labor-hour estimate.</ResponseField>
+        <ResponseField name="labor_hours_high" type="number | null">High end of labor-hour estimate.</ResponseField>
+        <ResponseField name="material_cost_low" type="number | null">Low end of material cost component in USD.</ResponseField>
+        <ResponseField name="material_cost_high" type="number | null">High end of material cost component in USD.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="source_basis" type="string | null">Description of the source or methodology used to derive this adder.</ResponseField>
+    <ResponseField name="calculation_notes" type="string | null">Free-text notes about how to apply this adder.</ResponseField>
+    <ResponseField name="unresolved_requirements" type="array">Conditions preventing this adder from reaching `quote_safe: true`.</ResponseField>
+    <ResponseField name="quote_safe" type="boolean">Whether this adder is verified for use in customer-facing quotes.</ResponseField>
+    <ResponseField name="confidence" type="string | null">Confidence tier.</ResponseField>
+
+    <ResponseField name="provenance" type="object">
+      Source traceability.
+      <Expandable title="provenance fields">
+        <ResponseField name="source_document_id" type="string | null">Internal source document reference.</ResponseField>
+        <ResponseField name="source_url" type="string | null">Source URL.</ResponseField>
+        <ResponseField name="last_verified_at" type="string | null">ISO 8601 timestamp of last verification.</ResponseField>
+        <ResponseField name="trust_basis" type="string">Always `labor_adder_context`.</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="coverage" type="object">
+  <Expandable title="Coverage fields">
+    <ResponseField name="trade" type="string">Trade filter applied.</ResponseField>
+    <ResponseField name="adder" type="string | null">Adder key filter applied.</ResponseField>
+    <ResponseField name="records_returned" type="integer">Number of adder records returned.</ResponseField>
+    <ResponseField name="quote_safe_only" type="boolean">Whether results were restricted to quote-safe adders.</ResponseField>
+    <ResponseField name="trust_basis" type="string">Description of the trust model for this dataset.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Requests
+
+<CodeGroup>
+
+```bash Regional Labor Rates
+curl -G https://homeservicedata.com/api/v1/context/labor \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "trade=hvac" \
+  --data-urlencode "state=TX" \
+  --data-urlencode "region_type=metro" \
+  --data-urlencode "limit=5"
+```
+
+```bash Labor Adders
+curl -G https://homeservicedata.com/api/v1/context/labor-adders \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "trade=hvac" \
+  --data-urlencode "quote_safe=true" \
+  --data-urlencode "limit=10"
+```
+
+</CodeGroup>
+
+## Example Response — Labor Adders
+
+```json
+{
+  "success": true,
+  "data": {
+    "records": [
+      {
+        "record_id": "adr_01hzka1bc2de3fg4hi5jk6uvwx",
+        "trade": "hvac",
+        "adder_key": "crane_lift",
+        "adder_label": "Crane Lift",
+        "adder_group": "access",
+        "unit": "per_job",
+        "amount_type": "range",
+        "ranges": {
+          "cost_low": 350.00,
+          "cost_high": 900.00,
+          "labor_hours_low": 2.0,
+          "labor_hours_high": 4.0,
+          "material_cost_low": null,
+          "material_cost_high": null
+        },
+        "source_basis": "Contractor survey and published service-area crane rental rates.",
+        "calculation_notes": "Apply when equipment must be lifted to roof or second-floor mechanical room.",
+        "unresolved_requirements": [],
+        "quote_safe": true,
+        "confidence": "medium",
+        "provenance": {
+          "source_document_id": "doc_01hzka1bc2de3fg4hi5jk6lbr",
+          "source_url": null,
+          "last_verified_at": "2024-07-01T00:00:00Z",
+          "trust_basis": "labor_adder_context"
+        }
+      }
+    ],
+    "coverage": {
+      "trade": "hvac",
+      "adder": null,
+      "records_returned": 1,
+      "quote_safe_only": true,
+      "trust_basis": "Adder records are context ranges or labor-hour assumptions unless an official deterministic fee source is loaded."
+    }
+  }
+}
+```

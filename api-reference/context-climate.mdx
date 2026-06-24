@@ -1,0 +1,217 @@
+---
+title: "GET /api/v1/context/climate — County Climate Data"
+sidebarTitle: "Climate"
+description: "Fetch IECC climate zone, degree days, and NOAA design-temperature context by state, county name, or FIPS code for HVAC load and equipment sizing."
+---
+
+The climate context endpoint returns county-level climate and weather-normal data used to support HVAC equipment sizing, load calculations, and incentive eligibility checks. Records draw from DOE/PNNL county climate-zone assignments and NOAA 1991–2020 station normals. The primary fields — IECC climate zone, HDD/CDD, and design temperatures — are `quote_safe: true` when backed by confirmed station matches. Design-temperature proxy values derived from NOAA hourly percentiles are provided as supplemental context and always carry `quote_safe: false`.
+
+**Endpoint**
+
+```
+GET https://homeservicedata.com/api/v1/context/climate
+```
+
+## Query Parameters
+
+<ParamField query="state" type="string">
+  Two-letter state code (e.g., `TX`, `MN`). Case-insensitive.
+</ParamField>
+
+<ParamField query="county" type="string">
+  County name. Partial match, case-insensitive (e.g., `Travis`, `Cook`).
+</ParamField>
+
+<ParamField query="county_fips" type="string">
+  5-digit county FIPS code (e.g., `48453` for Travis County, TX). Exact match.
+</ParamField>
+
+<ParamField query="quote_safe" type="boolean">
+  When `true`, returns only records verified for quote use. When `false`, returns unverified/context-only records.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="100">
+  Maximum number of records to return. Capped at `500`.
+</ParamField>
+
+## Response Fields
+
+<ResponseField name="records" type="array">
+  Array of county climate context objects.
+
+  <Expandable title="Record fields">
+    <ResponseField name="record_id" type="string">Unique record identifier.</ResponseField>
+
+    <ResponseField name="geography" type="object">
+      Geographic identifiers for the county.
+      <Expandable title="geography fields">
+        <ResponseField name="state_code" type="string">Two-letter state code.</ResponseField>
+        <ResponseField name="county_name" type="string">County name.</ResponseField>
+        <ResponseField name="county_fips" type="string">5-digit county FIPS code.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="climate" type="object">
+      Climate zone and weather-normal values.
+      <Expandable title="climate fields">
+        <ResponseField name="iecc_climate_zone" type="string">IECC 2021 climate zone designation (e.g., `3A`, `5B`).</ResponseField>
+        <ResponseField name="building_america_region" type="string | null">DOE Building America climate region label.</ResponseField>
+        <ResponseField name="moisture_regime" type="string | null">Moisture regime: `dry`, `moist`, `marine`, or `unknown`.</ResponseField>
+        <ResponseField name="cold_climate_flag" type="boolean">Whether the county qualifies as a cold or very cold climate zone.</ResponseField>
+        <ResponseField name="noaa_normal_period" type="string | null">NOAA normal period used (e.g., `1991-2020`).</ResponseField>
+        <ResponseField name="hdd_65" type="integer | null">Annual heating degree days base 65°F.</ResponseField>
+        <ResponseField name="cdd_65" type="integer | null">Annual cooling degree days base 65°F.</ResponseField>
+        <ResponseField name="design_heating_temp_f" type="number | null">ACCA Manual J design heating temperature in °F (quote-safe when station-matched).</ResponseField>
+        <ResponseField name="design_cooling_temp_f" type="number | null">ACCA Manual J design cooling temperature in °F (quote-safe when station-matched).</ResponseField>
+
+        <ResponseField name="design_temperature_proxy" type="object">
+          NOAA hourly percentile proxy values — supplemental context only, never quote-safe.
+          <Expandable title="proxy fields">
+            <ResponseField name="heating_temp_f" type="number | null">Heating design temperature proxy derived from NOAA hourly normals.</ResponseField>
+            <ResponseField name="cooling_temp_f" type="number | null">Cooling design temperature proxy derived from NOAA hourly normals.</ResponseField>
+            <ResponseField name="basis" type="string | null">Percentile method used to derive the proxy value.</ResponseField>
+            <ResponseField name="quote_safe" type="boolean">Always `false` for proxy values.</ResponseField>
+            <ResponseField name="unresolved_requirements" type="array">List of unresolved conditions preventing quote-safe status.</ResponseField>
+          </Expandable>
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="station_match" type="object">
+      Details of the matched NOAA weather station.
+      <Expandable title="station_match fields">
+        <ResponseField name="nearest_station_id" type="string | null">NOAA station identifier.</ResponseField>
+        <ResponseField name="nearest_station_name" type="string | null">Human-readable station name.</ResponseField>
+        <ResponseField name="distance_miles" type="number | null">Distance in miles from the county centroid to the matched station.</ResponseField>
+        <ResponseField name="method" type="string | null">Station-matching method used.</ResponseField>
+        <ResponseField name="confidence" type="string | null">Confidence tier for this station match.</ResponseField>
+        <ResponseField name="source_url" type="string | null">URL to the station data source.</ResponseField>
+        <ResponseField name="last_verified_at" type="string | null">ISO 8601 timestamp of last station-match verification.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="source_links" type="object">
+      URLs to underlying source documents.
+      <Expandable title="source_links fields">
+        <ResponseField name="county_context_url" type="string | null">URL to the county climate-zone context source.</ResponseField>
+        <ResponseField name="noaa_annual_normals_url" type="string | null">URL to NOAA annual normals data.</ResponseField>
+        <ResponseField name="noaa_monthly_normals_url" type="string | null">URL to NOAA monthly normals data.</ResponseField>
+        <ResponseField name="noaa_hourly_normals_url" type="string | null">URL to NOAA hourly normals data (basis of proxy values).</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="unresolved_requirements" type="array">List of conditions preventing this record from reaching `quote_safe: true`.</ResponseField>
+    <ResponseField name="quote_safe" type="boolean">Whether this record is cleared for use in customer-facing quotes.</ResponseField>
+    <ResponseField name="confidence" type="string | null">Confidence tier: `high`, `medium`, or `low`.</ResponseField>
+
+    <ResponseField name="provenance" type="object">
+      Source traceability metadata.
+      <Expandable title="provenance fields">
+        <ResponseField name="source_document_id" type="string | null">Internal source document reference.</ResponseField>
+        <ResponseField name="source_url" type="string | null">Canonical source URL.</ResponseField>
+        <ResponseField name="last_verified_at" type="string | null">ISO 8601 timestamp of last verification.</ResponseField>
+        <ResponseField name="trust_basis" type="string">Always `climate_design_context`.</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="coverage" type="object">
+  Query summary metadata.
+  <Expandable title="Coverage fields">
+    <ResponseField name="state" type="string | null">State filter applied.</ResponseField>
+    <ResponseField name="county" type="string | null">County filter applied.</ResponseField>
+    <ResponseField name="county_fips" type="string | null">FIPS filter applied.</ResponseField>
+    <ResponseField name="records_returned" type="integer">Number of records returned.</ResponseField>
+    <ResponseField name="quote_safe_only" type="boolean">Whether results were restricted to quote-safe records.</ResponseField>
+    <ResponseField name="trust_basis" type="string">Description of the trust model for this dataset.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Warning>
+  `design_temperature_proxy` values inside each record are derived from NOAA hourly percentile data and are always `quote_safe: false`. Do not use them as authoritative design temperatures in Manual J load calculations without independent verification.
+</Warning>
+
+## Example Request
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://homeservicedata.com/api/v1/context/climate \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "state=TX" \
+  --data-urlencode "county=Travis" \
+  --data-urlencode "quote_safe=true"
+```
+
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "records": [
+      {
+        "record_id": "clm_01hzka1bc2de3fg4hi5jk6abcd",
+        "geography": {
+          "state_code": "TX",
+          "county_name": "Travis",
+          "county_fips": "48453"
+        },
+        "climate": {
+          "iecc_climate_zone": "2A",
+          "building_america_region": "Hot-Humid",
+          "moisture_regime": "moist",
+          "cold_climate_flag": false,
+          "noaa_normal_period": "1991-2020",
+          "hdd_65": 1648,
+          "cdd_65": 3114,
+          "design_heating_temp_f": 26.0,
+          "design_cooling_temp_f": 99.0,
+          "design_temperature_proxy": {
+            "heating_temp_f": 24.5,
+            "cooling_temp_f": 100.2,
+            "basis": "noaa_hourly_p99",
+            "quote_safe": false,
+            "unresolved_requirements": ["proxy_values_not_verified_for_quote_use"]
+          }
+        },
+        "station_match": {
+          "nearest_station_id": "USW00013958",
+          "nearest_station_name": "Austin Bergstrom International Airport",
+          "distance_miles": 4.7,
+          "method": "centroid_nearest",
+          "confidence": "high",
+          "source_url": "https://www.ncei.noaa.gov/",
+          "last_verified_at": "2024-09-01T00:00:00Z"
+        },
+        "source_links": {
+          "county_context_url": "https://www.energy.gov/eere/buildings/climate-zones",
+          "noaa_annual_normals_url": "https://www.ncei.noaa.gov/access/us-climate-normals/",
+          "noaa_monthly_normals_url": null,
+          "noaa_hourly_normals_url": null
+        },
+        "unresolved_requirements": [],
+        "quote_safe": true,
+        "confidence": "high",
+        "provenance": {
+          "source_document_id": "doc_01hzka1bc2de3fg4hi5jk6xyz",
+          "source_url": "https://www.energy.gov/eere/buildings/climate-zones",
+          "last_verified_at": "2024-09-01T00:00:00Z",
+          "trust_basis": "climate_design_context"
+        }
+      }
+    ],
+    "coverage": {
+      "state": "TX",
+      "county": "Travis",
+      "county_fips": null,
+      "records_returned": 1,
+      "quote_safe_only": true,
+      "trust_basis": "DOE/PNNL county climate-zone context plus NOAA 1991-2020 station normals. NOAA hourly percentile values are exposed only as non-quote-safe design-temperature proxies."
+    }
+  }
+}
+```

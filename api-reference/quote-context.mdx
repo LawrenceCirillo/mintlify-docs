@@ -1,0 +1,351 @@
+---
+title: "GET /api/v1/quote-context — Bundled Quote Context"
+sidebarTitle: "Quote Context"
+description: "Single endpoint bundling finance products, equipment, incentives, climate data, labor adders, permits, and utility territory for any home-service quote."
+---
+
+The `/api/v1/quote-context` endpoint is the primary entry point for building home-service quotes. Rather than stitching together five or six separate API calls, you send one GET request and receive finance options, equipment records, incentive eligibility, climate context, labor adders, permit requirements, and utility territory resolution in a single response. Every response also includes a `coverage` object that summarizes how many quote-safe records were returned and surfaces any data gaps or unresolved requirements so your quoting tool can decide whether it has enough information to present a price.
+
+## Request
+
+```
+GET https://homeservicedata.com/api/v1/quote-context
+```
+
+### Authentication
+
+All requests must include your API key in the `x-api-key` header. This endpoint requires a **production** access tier.
+
+### Query Parameters
+
+#### Trade & Geography
+
+<ParamField query="trade" type="string" default="solar">
+  The home-service vertical to scope the response. Defaults to `solar` when omitted.
+
+  Allowed values: `solar`, `hvac`, `roofing`, `plumbing`, `electrical`.
+</ParamField>
+
+<ParamField query="state" type="string">
+  Two-letter U.S. state code (e.g. `GA`, `CA`, `TX`). Used to filter finance products, incentives, permits, and climate records to the given state. Must be exactly two uppercase letters; otherwise a `400` is returned.
+</ParamField>
+
+<ParamField query="county" type="string">
+  County name (e.g. `Fulton`, `Los Angeles`). The `County` suffix is stripped automatically before matching. Used alongside `state` for climate, permit, and finance-eligibility filtering.
+</ParamField>
+
+<ParamField query="county_fips" type="string">
+  Five-digit FIPS code for the county (e.g. `13121`). Alternative to `county` when you have a FIPS code available. Used for climate context lookups.
+</ParamField>
+
+<ParamField query="city" type="string">
+  City name. Used to filter permit records when `state` or `county` is also provided.
+</ParamField>
+
+<ParamField query="address" type="string">
+  Full postal address (street, city, state, ZIP). Maximum **300 characters**. When provided, the API resolves utility territory for the address and includes the result in `context.utility_territory_resolution`. The raw address is **never stored** — only the resolution result is retained. Triggering utility territory resolution consumes from a separate rate-limit budget; see the note below.
+</ParamField>
+
+#### Finance Filters
+
+<ParamField query="financier" type="string">
+  Filter finance products to a specific lender by slug (e.g. `goodleap`, `mosaic`). The value is slugified before matching.
+</ParamField>
+
+<ParamField query="payment_type" type="string">
+  Filter finance products by payment type (e.g. `loan`, `lease`, `ppa`).
+</ParamField>
+
+<ParamField query="term_months" type="integer">
+  Filter finance products by loan term in months. Must be a valid integer.
+</ParamField>
+
+<ParamField query="finance_limit" type="integer" default="25">
+  Maximum number of finance records to return. Minimum `1`, maximum `100`.
+</ParamField>
+
+#### Equipment Filters
+
+<ParamField query="equipment_category" type="string">
+  Filter the equipment catalog to a specific category.
+
+  Allowed values: `module`, `inverter`, `roofing`, `hvac`, `product`.
+</ParamField>
+
+<ParamField query="manufacturer" type="string">
+  Filter equipment records by manufacturer name.
+</ParamField>
+
+<ParamField query="sku" type="string">
+  Filter equipment records by SKU.
+</ParamField>
+
+<ParamField query="equipment_id" type="string">
+  HVAC equipment ID. When provided, the API fetches equipment-specific incentive context and uses the equipment's `measure_key` to scope incentive and finance-eligibility lookups (unless `measure` is also explicitly supplied).
+</ParamField>
+
+<ParamField query="equipment_limit" type="integer" default="25">
+  Maximum number of equipment records to return. Minimum `1`, maximum `100`.
+</ParamField>
+
+#### Context Filters
+
+<ParamField query="utility" type="string">
+  Utility name for incentive lookup (e.g. `Georgia Power`). Used to scope incentive records to a specific utility provider.
+</ParamField>
+
+<ParamField query="measure" type="string">
+  Measure key for incentive and finance-eligibility filtering (e.g. `air_source_heat_pump`, `rooftop_solar`). When omitted and `equipment_id` is provided, the measure is inferred from the equipment record. For `trade=hvac` with no `equipment_id`, defaults to `air_source_heat_pump`.
+</ParamField>
+
+<ParamField query="context_limit" type="integer" default="10">
+  Maximum number of records to return per context category (climate, incentives, labor adders, permits, finance eligibility). Minimum `1`, maximum `50`. Also caps utility territory matches at `10`.
+</ParamField>
+
+---
+
+<Note>
+  The `address` field is used **only** for utility territory resolution during the current request. It is never persisted, logged, or associated with your API key. The `inputs.address_redacted` field in the response is a boolean that confirms whether an address was supplied — the address itself is not echoed back.
+</Note>
+
+<Warning>
+  Always inspect the `coverage.warnings[]` array in every response. Warnings indicate data gaps such as no finance rows matching the requested trade, missing climate context due to absent geography inputs, or a utility territory resolution that did not reach quote-safe status. A `200` status with an empty `finance` array and warnings present means the response is incomplete for quoting purposes.
+</Warning>
+
+<Tip>
+  For `trade=hvac`, always include at least `state` and `county` (or `county_fips`) to receive climate context records. Without geography, the climate array will be empty and a warning will be added to `coverage.warnings`.
+</Tip>
+
+---
+
+## Response
+
+<ResponseField name="data" type="object">
+  Top-level `data` envelope containing the full quote context bundle.
+
+  <Expandable title="data">
+    <ResponseField name="trade" type="string">
+      The trade that was used to scope this response (e.g. `hvac`, `solar`).
+    </ResponseField>
+
+    <ResponseField name="inputs" type="object">
+      Echo of all resolved inputs used to construct this response.
+
+      <Expandable title="inputs">
+        <ResponseField name="state" type="string | null">Normalized two-letter state code, or `null` if not provided.</ResponseField>
+        <ResponseField name="county" type="string | null">County name as supplied.</ResponseField>
+        <ResponseField name="county_fips" type="string | null">County FIPS code as supplied.</ResponseField>
+        <ResponseField name="city" type="string | null">City as supplied.</ResponseField>
+        <ResponseField name="utility" type="string | null">Utility name as supplied.</ResponseField>
+        <ResponseField name="measure" type="string | null">Resolved measure key — either the explicit `measure` param, the equipment's measure key, or the trade default.</ResponseField>
+        <ResponseField name="address_redacted" type="boolean">
+          `true` if an `address` was provided, `false` otherwise. The address itself is never returned.
+        </ResponseField>
+        <ResponseField name="financier" type="string | null">Financier slug filter as supplied.</ResponseField>
+        <ResponseField name="payment_type" type="string | null">Payment type filter as supplied.</ResponseField>
+        <ResponseField name="term_months" type="integer | null">Term filter in months as supplied.</ResponseField>
+        <ResponseField name="equipment_category" type="string | null">Normalized equipment category filter.</ResponseField>
+        <ResponseField name="manufacturer" type="string | null">Manufacturer filter as supplied.</ResponseField>
+        <ResponseField name="sku" type="string | null">SKU filter as supplied.</ResponseField>
+        <ResponseField name="equipment_id" type="string | null">HVAC equipment ID as supplied.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="coverage" type="object">
+      Summary of records returned and data quality signals.
+
+      <Expandable title="coverage">
+        <ResponseField name="finance_records" type="integer">Number of finance records returned.</ResponseField>
+        <ResponseField name="equipment_records" type="integer">Number of equipment records returned (capped by `equipment_limit`).</ResponseField>
+        <ResponseField name="equipment_total_available" type="integer">Total equipment records matching the filters, before the limit is applied.</ResponseField>
+
+        <ResponseField name="context_records" type="object">
+          Per-category count of context records returned.
+
+          <Expandable title="context_records">
+            <ResponseField name="climate" type="integer">Climate context records returned.</ResponseField>
+            <ResponseField name="incentives" type="integer">Incentive records returned.</ResponseField>
+            <ResponseField name="labor_adders" type="integer">Labor adder records returned.</ResponseField>
+            <ResponseField name="permits" type="integer">Permit context records returned.</ResponseField>
+            <ResponseField name="finance_eligibility" type="integer">Finance eligibility context records returned.</ResponseField>
+            <ResponseField name="utility_territory" type="integer">`1` if utility territory was resolved, `0` otherwise.</ResponseField>
+          </Expandable>
+        </ResponseField>
+
+        <ResponseField name="quote_safe_summary" type="object">
+          Per-category breakdown of quote-safe vs. non-quote-safe records.
+
+          <Expandable title="quote_safe_summary">
+            <ResponseField name="finance" type="object">
+              `{ total, quote_safe, not_quote_safe }` for finance records.
+            </ResponseField>
+            <ResponseField name="equipment" type="object">
+              `{ total, quote_safe, not_quote_safe }` for equipment records.
+            </ResponseField>
+            <ResponseField name="climate" type="object">
+              `{ total, quote_safe, not_quote_safe }` for climate records.
+            </ResponseField>
+            <ResponseField name="incentives" type="object">
+              `{ total, quote_safe, not_quote_safe }` for incentive records.
+            </ResponseField>
+            <ResponseField name="labor_adders" type="object">
+              `{ total, quote_safe, not_quote_safe }` for labor adder records.
+            </ResponseField>
+            <ResponseField name="permits" type="object">
+              `{ total, quote_safe, not_quote_safe }` for permit records.
+            </ResponseField>
+            <ResponseField name="finance_eligibility" type="object">
+              `{ total, quote_safe, not_quote_safe }` for finance eligibility records.
+            </ResponseField>
+            <ResponseField name="utility_territory" type="object">
+              `{ total, quote_safe, not_quote_safe }` for utility territory resolution.
+            </ResponseField>
+          </Expandable>
+        </ResponseField>
+
+        <ResponseField name="unresolved_requirements" type="string[]">
+          Deduplicated list of unresolved requirement strings bubbled up from individual records across all context categories. Each item is prefixed with its source category (e.g. `"climate: requires county_fips"`, `"incentives: utility name required"`).
+        </ResponseField>
+
+        <ResponseField name="warnings" type="string[]">
+          High-level warnings about the completeness of the response. Inspect this array before presenting a quote. Common values include notices about zero finance rows, missing geography for climate context, and non-quote-safe utility resolution.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="finance" type="array">
+      Array of finance product records matching the trade and applied filters. Each object contains program details, dealer fees, payment options, and quote-safe status.
+    </ResponseField>
+
+    <ResponseField name="equipment" type="array">
+      Array of equipment catalog records matching the trade and applied filters. Each object contains manufacturer, SKU, pricing, and quote-safe status.
+    </ResponseField>
+
+    <ResponseField name="context" type="object">
+      All contextual data needed to enrich and validate a quote.
+
+      <Expandable title="context">
+        <ResponseField name="equipment_incentive_context" type="object | null">
+          Resolved incentive context for the supplied `equipment_id`. `null` when `equipment_id` was not provided.
+        </ResponseField>
+        <ResponseField name="climate" type="array">
+          Climate context records for the specified geography. Populated for `trade=hvac` when `state` and `county` or `county_fips` are provided.
+        </ResponseField>
+        <ResponseField name="incentives" type="array">
+          Incentive records matching the trade, state, utility, and measure.
+        </ResponseField>
+        <ResponseField name="labor_adders" type="array">
+          Labor adder records for the specified trade.
+        </ResponseField>
+        <ResponseField name="permits" type="array">
+          Permit context records for the specified trade and geography.
+        </ResponseField>
+        <ResponseField name="finance_eligibility" type="array">
+          Finance eligibility records matching the trade, state, county, financier, and measure.
+        </ResponseField>
+        <ResponseField name="utility_territory_resolution" type="object | null">
+          Utility territory resolution result for the provided `address`. Contains resolved utility name, quote-safe status, and any unresolved requirements. `null` when `address` was not provided.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Examples
+
+<CodeGroup>
+```bash cURL
+curl -G https://homeservicedata.com/api/v1/quote-context \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "trade=hvac" \
+  --data-urlencode "state=GA" \
+  --data-urlencode "county=Fulton" \
+  --data-urlencode "measure=air_source_heat_pump"
+```
+
+```bash cURL — with address
+curl -G https://homeservicedata.com/api/v1/quote-context \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "trade=hvac" \
+  --data-urlencode "address=123 Peachtree St NE, Atlanta, GA 30309" \
+  --data-urlencode "measure=air_source_heat_pump" \
+  --data-urlencode "financier=goodleap"
+```
+
+```bash cURL — solar with equipment filters
+curl -G https://homeservicedata.com/api/v1/quote-context \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "trade=solar" \
+  --data-urlencode "state=CA" \
+  --data-urlencode "equipment_category=module" \
+  --data-urlencode "manufacturer=Qcells" \
+  --data-urlencode "finance_limit=10" \
+  --data-urlencode "equipment_limit=50"
+```
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "data": {
+    "trade": "hvac",
+    "inputs": {
+      "state": "GA",
+      "county": "Fulton",
+      "county_fips": null,
+      "city": null,
+      "utility": null,
+      "measure": "air_source_heat_pump",
+      "address_redacted": false,
+      "financier": null,
+      "payment_type": null,
+      "term_months": null,
+      "equipment_category": null,
+      "manufacturer": null,
+      "sku": null,
+      "equipment_id": null
+    },
+    "coverage": {
+      "finance_records": 18,
+      "equipment_records": 25,
+      "equipment_total_available": 142,
+      "context_records": {
+        "climate": 3,
+        "incentives": 5,
+        "labor_adders": 4,
+        "permits": 2,
+        "finance_eligibility": 6,
+        "utility_territory": 0
+      },
+      "quote_safe_summary": {
+        "finance": { "total": 18, "quote_safe": 16, "not_quote_safe": 2 },
+        "equipment": { "total": 25, "quote_safe": 22, "not_quote_safe": 3 },
+        "climate": { "total": 3, "quote_safe": 3, "not_quote_safe": 0 },
+        "incentives": { "total": 5, "quote_safe": 4, "not_quote_safe": 1 },
+        "labor_adders": { "total": 4, "quote_safe": 4, "not_quote_safe": 0 },
+        "permits": { "total": 2, "quote_safe": 2, "not_quote_safe": 0 },
+        "finance_eligibility": { "total": 6, "quote_safe": 6, "not_quote_safe": 0 },
+        "utility_territory": { "total": 0, "quote_safe": 0, "not_quote_safe": 0 }
+      },
+      "unresolved_requirements": [],
+      "warnings": []
+    },
+    "finance": [ /* finance product records */ ],
+    "equipment": [ /* equipment catalog records */ ],
+    "context": {
+      "equipment_incentive_context": null,
+      "climate": [ /* climate context records */ ],
+      "incentives": [ /* incentive records */ ],
+      "labor_adders": [ /* labor adder records */ ],
+      "permits": [ /* permit records */ ],
+      "finance_eligibility": [ /* eligibility records */ ],
+      "utility_territory_resolution": null
+    }
+  },
+  "error": null,
+  "meta": null
+}
+```

@@ -1,0 +1,298 @@
+---
+title: "GET /api/v1/catalog/equipment — Equipment Catalog"
+sidebarTitle: "Equipment Catalog"
+description: "Browse the full equipment catalog with filters for trade, category, manufacturer, and SKU — paginated with category-specific spec objects."
+---
+
+The Equipment Catalog endpoint lets you browse and filter the full global product database. Records span solar modules and inverters, HVAC systems, roofing materials, and generic hardware products. Each record includes base pricing, a trade-specific specs object, embedded pricing intelligence where available, and a `provenance` block that tells you exactly how trustworthy the record is. This is the right endpoint for building product pickers, populating quote-line dropdowns, and syncing your local product database.
+
+## Endpoint
+
+```
+GET https://homeservicedata.com/api/v1/catalog/equipment
+```
+
+## Authentication
+
+Requires a valid `x-api-key` header. The endpoint resolves the appropriate dataset key based on your `trade` and `category` filters, then checks your organization's entitlement. A 403 is returned if your key lacks access to the resolved dataset.
+
+## Query Parameters
+
+<ParamField query="trade" type="string">
+  Filter by trade vertical. One of: `solar`, `hvac`, `roofing`, `plumbing`, `electrical`. Omit to browse across all trades your key is entitled to.
+</ParamField>
+
+<ParamField query="category" type="string">
+  Filter by equipment category. One of: `module`, `inverter`, `roofing`, `hvac`, `product`. When a category is specified, the response includes a richer, category-specific `specs` object (see [Category Specs](#category-specific-specs) below).
+
+  | Category | Trade | Description |
+  |---|---|---|
+  | `module` | `solar` | Solar PV modules with STC/PTC ratings, dimensions, and cell data |
+  | `inverter` | `solar` | Solar inverters with pricing adjustments and default flags |
+  | `roofing` | `roofing` | Roofing materials with warranty, fire class, and exposure specs |
+  | `hvac` | `hvac` | HVAC systems with SEER2/EER2/HSPF2 ratings and AHRI certification |
+  | `product` | any | Generic hardware and products without a category-specific spec table |
+</ParamField>
+
+<ParamField query="manufacturer" type="string">
+  Case-insensitive substring filter on the manufacturer name. For example, `manufacturer=Goodman` matches `"Goodman Manufacturing"` and `"Goodman/Daikin"`.
+</ParamField>
+
+<ParamField query="sku" type="string">
+  Case-insensitive substring filter on the SKU or model number. For example, `sku=GSX140` matches `"Goodman GSX14024"` and `"GSX14036"`.
+</ParamField>
+
+<ParamField query="page" type="integer">
+  Page number to retrieve, 1-indexed. Default `1`.
+</ParamField>
+
+<ParamField query="per_page" type="integer">
+  Number of records per page. Minimum `1`, maximum `100`, default `25`. Results are ordered by `manufacturer` ascending, then `sku` ascending.
+</ParamField>
+
+## Request Examples
+
+<CodeGroup>
+```http Browse all HVAC equipment
+GET /api/v1/catalog/equipment?trade=hvac&category=hvac&per_page=25 HTTP/1.1
+Host: homeservicedata.com
+x-api-key: YOUR_API_KEY
+```
+
+```http Search by manufacturer and SKU
+GET /api/v1/catalog/equipment?manufacturer=Goodman&sku=GSX14 HTTP/1.1
+Host: homeservicedata.com
+x-api-key: YOUR_API_KEY
+```
+
+```http Solar modules, page 2
+GET /api/v1/catalog/equipment?trade=solar&category=module&page=2&per_page=50 HTTP/1.1
+Host: homeservicedata.com
+x-api-key: YOUR_API_KEY
+```
+</CodeGroup>
+
+```typescript TypeScript example
+const params = new URLSearchParams({
+  trade: "hvac",
+  category: "hvac",
+  manufacturer: "Goodman",
+  page: "1",
+  per_page: "25",
+});
+
+const response = await fetch(
+  `https://homeservicedata.com/api/v1/catalog/equipment?${params}`,
+  { headers: { "x-api-key": process.env.HSD_API_KEY! } }
+);
+
+const { data, error, meta } = await response.json();
+if (error) throw new Error(error);
+// data is ProductEquipmentRecord[]
+// meta.total_pages tells you how many pages remain
+```
+
+## Response
+
+```json
+{
+  "data": [
+    {
+      "record_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "trade": "hvac",
+      "category": "hvac",
+      "manufacturer": "Goodman",
+      "sku": "GSX14024",
+      "base_cost": 1240.00,
+      "is_archived": false,
+      "pricing": {
+        "observed_public_price": 1310.00,
+        "estimated_base_cost": 1240.00,
+        "estimated_installed_price_low": 3800.00,
+        "estimated_installed_price_high": 5200.00,
+        "contractor_gross_margin_assumption": 0.35,
+        "confidence": "high",
+        "method": "price_observation_model",
+        "model_version": "v2",
+        "observation_count": 14,
+        "source_document_id": "f9e8d7c6-...",
+        "last_verified_at": "2024-11-20T00:00:00.000Z",
+        "notes": null
+      },
+      "specs": {
+        "seer2_rating": 15.2,
+        "eer2_rating": 12.5,
+        "tonnage": 2.0,
+        "refrigerant_type": "R-410A",
+        "cooling_capacity_btu_h": 24000,
+        "compressor_staging": "single",
+        "ahri_reference_number": "207845123",
+        "cold_climate": false,
+        "energy_star_model_identifier": "Goodman+GSX14024",
+        "date_certified": "2023-06-15",
+        "source_url": "https://www.ahridirectory.org/..."
+      },
+      "provenance": {
+        "source_document_id": "f9e8d7c6-...",
+        "approval_state": "published",
+        "last_verified_at": "2024-11-20T00:00:00.000Z",
+        "quote_safe": true,
+        "trust_basis": "catalog_record"
+      }
+    }
+  ],
+  "error": null,
+  "meta": {
+    "page": 1,
+    "per_page": 25,
+    "total": 342,
+    "total_pages": 14
+  }
+}
+```
+
+### Equipment Record Fields
+
+<ResponseField name="record_id" type="string">
+  Stable UUID for this equipment record. Use this to reference the record in quote line items and downstream systems.
+</ResponseField>
+
+<ResponseField name="trade" type="string">
+  The trade vertical: `solar`, `hvac`, `roofing`, `plumbing`, or `electrical`.
+</ResponseField>
+
+<ResponseField name="category" type="string">
+  The equipment category: `module`, `inverter`, `roofing`, `hvac`, or `product`.
+</ResponseField>
+
+<ResponseField name="manufacturer" type="string">
+  The manufacturer or brand name.
+</ResponseField>
+
+<ResponseField name="sku" type="string">
+  The manufacturer model number or SKU.
+</ResponseField>
+
+<ResponseField name="base_cost" type="number">
+  The catalog base cost in USD. This is the platform's internal cost basis and may differ from observed market prices. Use `pricing.estimated_base_cost` for quote calculations when available.
+</ResponseField>
+
+<ResponseField name="is_archived" type="boolean">
+  `true` when the product has been discontinued or removed from active quoting. Archived records are excluded by default unless `include_archived=true` is passed. Archived records always have `provenance.quote_safe: false`.
+</ResponseField>
+
+<ResponseField name="pricing" type="object | null">
+  Embedded pricing intelligence derived from market price observations. `null` when no pricing data has been collected for this record.
+
+  <Expandable title="pricing fields">
+    <ResponseField name="pricing.observed_public_price" type="number | null">
+      The most recently observed public market price in USD. `null` if no direct observation exists.
+    </ResponseField>
+    <ResponseField name="pricing.estimated_base_cost" type="number | null">
+      The platform's modeled estimate of distributor cost in USD. Use this for equipment line items in quote calculations.
+    </ResponseField>
+    <ResponseField name="pricing.estimated_installed_price_low" type="number | null">
+      Low end of the estimated fully installed price range in USD.
+    </ResponseField>
+    <ResponseField name="pricing.estimated_installed_price_high" type="number | null">
+      High end of the estimated fully installed price range in USD.
+    </ResponseField>
+    <ResponseField name="pricing.contractor_gross_margin_assumption" type="number | null">
+      The gross margin assumption used in the installed price model, expressed as a decimal (e.g. `0.35` = 35%).
+    </ResponseField>
+    <ResponseField name="pricing.confidence" type="string | null">
+      Pricing confidence tier: `high`, `medium`, or `low`.
+    </ResponseField>
+    <ResponseField name="pricing.method" type="string | null">
+      The name of the pricing model or method used to derive estimates.
+    </ResponseField>
+    <ResponseField name="pricing.model_version" type="string | null">
+      Version string of the pricing model.
+    </ResponseField>
+    <ResponseField name="pricing.observation_count" type="number">
+      Number of market price observations that informed this record's pricing estimates.
+    </ResponseField>
+    <ResponseField name="pricing.source_document_id" type="string | null">
+      UUID of the source document that contributed the pricing data.
+    </ResponseField>
+    <ResponseField name="pricing.last_verified_at" type="string | null">
+      ISO 8601 timestamp of the most recent pricing verification.
+    </ResponseField>
+    <ResponseField name="pricing.notes" type="string | null">
+      Free-text notes from the pricing analyst, if any.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="specs" type="object">
+  Category-specific technical specifications. The shape of this object varies by `category` — see [Category-Specific Specs](#category-specific-specs) below. An empty object `{}` is returned for `product` category records or when no spec record exists.
+</ResponseField>
+
+<ResponseField name="provenance" type="object">
+  Data lineage and trust metadata for this record.
+
+  <Expandable title="provenance fields">
+    <ResponseField name="provenance.source_document_id" type="string | null">
+      UUID of the source document this record was ingested from.
+    </ResponseField>
+    <ResponseField name="provenance.approval_state" type="string">
+      Always `"published"` for records returned by this endpoint.
+    </ResponseField>
+    <ResponseField name="provenance.last_verified_at" type="string | null">
+      ISO 8601 timestamp of the most recent source verification.
+    </ResponseField>
+    <ResponseField name="provenance.quote_safe" type="boolean">
+      `true` when the record is approved for use in customer-facing quotes. Active (non-archived) catalog records are `quote_safe: true`.
+    </ResponseField>
+    <ResponseField name="provenance.trust_basis" type="string">
+      Always `"catalog_record"` for equipment records, indicating the record originates from a curated, reviewed catalog entry.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## The `quote_safe` Flag on Equipment Records
+
+<Note>
+  For equipment catalog records, `quote_safe` is derived directly from `is_archived`. Any active, non-archived record is `quote_safe: true`. If you need to enforce this in your UI without calling `provenance.quote_safe`, check `is_archived === false`.
+</Note>
+
+The catalog does not require `quote_safe` as a filter parameter — the default behavior (excluding archived records) already ensures all returned records are quote-ready. If you are building a product management tool that needs to display discontinued items, pass `include_archived=true` and handle the `is_archived` flag in your UI.
+
+## Category-Specific Specs
+
+When you filter by `category`, the `specs` object on each record contains the full set of fields for that category. Without a `category` filter, a summarized subset is returned.
+
+<CardGroup cols={2}>
+  <Card title="module" icon="solar-panel">
+    `rating_stc`, `rating_ptc`, `efficiency`, `voc`, `isc`, `vmp`, `imp`, `length_mm`, `width_mm`, `weight_kg`, `product_warranty_years`, `frame_color`, `backsheet_color`, `cell_quantity`, `temp_coeff_pmax`, `pan_file_url`
+  </Card>
+  <Card title="inverter" icon="zap">
+    `external_id`, `labor_adjustment`, `price_adjustment`, `price_adjustment_per_watt`, `is_default`, `price_adjustment_per_panel`
+  </Card>
+  <Card title="roofing" icon="home">
+    `material_type`, `warranty_years`, `wind_rating_mph`, `fire_class`, `impact_rating_class`, `exposure_inches`, `bundles_per_square`, `weight_per_square_lbs`, `algae_resistance_years`, `citation_url`
+  </Card>
+  <Card title="hvac" icon="wind">
+    `seer2_rating`, `eer2_rating`, `hspf2_rating`, `tonnage`, `refrigerant_type`, `cooling_capacity_btu_h`, `compressor_staging`, `cold_climate`, `ahri_reference_number`, `energy_star_model_identifier`, `date_certified`, `source_url` (full list includes heating capacities at 47°F/17°F/5°F, COP, and all AHRI certification fields)
+  </Card>
+</CardGroup>
+
+<Tip>
+  Always pass `category` when you know the type of equipment you need. This enables an inner join against the spec table, which filters out any records that do not have a spec entry — ensuring every record in the response has a fully populated `specs` object.
+</Tip>
+
+## Errors
+
+| Status | Message | Cause |
+|---|---|---|
+| `400` | `Unsupported category "…". Use module, inverter, roofing, hvac, or product.` | `category` value not in the allowed set |
+| `400` | `Unsupported trade "…". Use solar, roofing, hvac, plumbing, or electrical.` | `trade` value not in the allowed set |
+| `403` | `Dataset access required: … requires production access.` | Key lacks entitlement for the resolved dataset |
+| `401` | `Missing x-api-key header.` | No API key provided |
+| `500` | `Internal server error.` | Unexpected database error — retry with backoff |
+
+## Related Endpoints
+
+- **[Search](/api-reference/search)** — Find equipment by name or SKU without knowing the category upfront, alongside results from other dataset types.
+- **Quote Context (`/api/v1/quote-context`)** — Returns a pre-assembled, quote-ready bundle that includes recommended equipment options, finance programs, incentives, and utility rates for a specific address and trade. Use this instead of the catalog endpoint when building a quote flow that needs fully contextualized data.
+- **Hardware Inverters (`/api/v1/hardware/inverters`)** — A legacy endpoint that returns solar inverter records in the original `InverterRecord` shape. New integrations should prefer the catalog endpoint with `category=inverter`.

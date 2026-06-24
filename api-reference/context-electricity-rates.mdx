@@ -1,0 +1,151 @@
+---
+title: "GET /api/v1/context/electricity-rates — EIA Rates"
+sidebarTitle: "Electricity Rates"
+description: "Retrieve EIA regional electricity rate averages by state, census division, or national scope for market context in solar, HVAC, and electrification quotes."
+---
+
+The electricity rates endpoint surfaces EIA regional average electricity prices sourced from EIA Electric Sales, Revenue, and Average Price Table 4. Records cover national, census division, and state-level aggregations for residential, commercial, and industrial customer classes. These rates are market context for payback modeling and proposal storytelling — they are **not** customer tariff truth and should not be presented as what a specific customer actually pays.
+
+**Endpoint**
+
+```
+GET https://homeservicedata.com/api/v1/context/electricity-rates
+```
+
+## Query Parameters
+
+<ParamField query="state" type="string">
+  Two-letter state code (e.g., `CA`, `NY`). Returns state-level rate records for that state. Case-insensitive.
+</ParamField>
+
+<ParamField query="region_type" type="string">
+  Filter by geographic aggregation level. One of: `national`, `census_division`, `state`.
+</ParamField>
+
+<ParamField query="region_code" type="string">
+  Specific region code to match. For state records, this is the two-letter state code. For census division records, this is the EIA division code (e.g., `pacific`, `south_atlantic`).
+</ParamField>
+
+<ParamField query="data_year" type="integer">
+  Filter to a specific publication year (e.g., `2023`). Must be a four-digit integer greater than `2000`.
+</ParamField>
+
+<ParamField query="include_divisions" type="boolean" default="false">
+  When `true`, census division records are included alongside state records in the same response.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="100">
+  Maximum number of records to return. Capped at `500`.
+</ParamField>
+
+## Response Fields
+
+<ResponseField name="records" type="array">
+  Array of regional electricity rate objects.
+
+  <Expandable title="Record fields">
+    <ResponseField name="id" type="string">Unique record identifier.</ResponseField>
+    <ResponseField name="source_document_id" type="string | null">Internal reference to the source document.</ResponseField>
+    <ResponseField name="region_type" type="string">Aggregation level: `national`, `census_division`, or `state`.</ResponseField>
+    <ResponseField name="region_code" type="string | null">Region identifier code.</ResponseField>
+    <ResponseField name="state_code" type="string | null">Two-letter state code (populated for `state` records).</ResponseField>
+    <ResponseField name="region_name" type="string">Human-readable region name (e.g., `California`, `Pacific Division`).</ResponseField>
+    <ResponseField name="data_year" type="integer">Calendar year the EIA data represents.</ResponseField>
+    <ResponseField name="effective_period" type="string | null">Effective period label (e.g., `2023-annual`).</ResponseField>
+    <ResponseField name="residential_cents_per_kwh" type="number | null">Average residential rate in cents per kWh.</ResponseField>
+    <ResponseField name="commercial_cents_per_kwh" type="number | null">Average commercial rate in cents per kWh.</ResponseField>
+    <ResponseField name="industrial_cents_per_kwh" type="number | null">Average industrial rate in cents per kWh.</ResponseField>
+    <ResponseField name="transportation_cents_per_kwh" type="number | null">Average transportation sector rate in cents per kWh.</ResponseField>
+    <ResponseField name="total_cents_per_kwh" type="number | null">All-sector average rate in cents per kWh.</ResponseField>
+    <ResponseField name="residential_usd_per_kwh" type="number | null">Residential rate in USD per kWh (decimal form of `residential_cents_per_kwh / 100`).</ResponseField>
+    <ResponseField name="commercial_usd_per_kwh" type="number | null">Commercial rate in USD per kWh.</ResponseField>
+    <ResponseField name="industrial_usd_per_kwh" type="number | null">Industrial rate in USD per kWh.</ResponseField>
+    <ResponseField name="transportation_usd_per_kwh" type="number | null">Transportation rate in USD per kWh.</ResponseField>
+    <ResponseField name="total_usd_per_kwh" type="number | null">All-sector average rate in USD per kWh.</ResponseField>
+    <ResponseField name="source_url" type="string | null">URL to the EIA source table.</ResponseField>
+    <ResponseField name="source_table" type="string | null">EIA source table identifier.</ResponseField>
+    <ResponseField name="last_verified_at" type="string | null">ISO 8601 timestamp of last data verification.</ResponseField>
+    <ResponseField name="applicable_trades" type="array">List of trade verticals for which this rate context is relevant (e.g., `["solar", "hvac"]`).</ResponseField>
+    <ResponseField name="metadata" type="object | null">Additional source-specific key-value pairs.</ResponseField>
+    <ResponseField name="updated_at" type="string | null">ISO 8601 timestamp of last record update.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="coverage" type="object">
+  Query summary and dataset attribution.
+
+  <Expandable title="Coverage fields">
+    <ResponseField name="source" type="string">Dataset source: `EIA Electric Sales, Revenue, and Average Price Table 4`.</ResponseField>
+    <ResponseField name="latest_loaded_year" type="integer | null">Most recent data year present in the returned records.</ResponseField>
+    <ResponseField name="regions_returned" type="integer">Number of records returned.</ResponseField>
+    <ResponseField name="quote_safe_only" type="boolean">Always `false` — EIA averages are market context only.</ResponseField>
+    <ResponseField name="usage_note" type="string">Reminder that EIA averages are market context and not customer tariff truth.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Warning>
+  EIA electricity rate averages are market-level context. They reflect regional averages — not the specific rate plan, time-of-use schedule, or demand charges applicable to any individual customer. Do not present these figures as a customer's actual electricity cost without supplementing with utility-specific tariff data.
+</Warning>
+
+<Tip>
+  For solar payback calculations, use `residential_usd_per_kwh` from the state record that matches the job location, paired with the customer's actual consumption. Cross-reference against the customer's utility bill for accuracy.
+</Tip>
+
+## Example Request
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://homeservicedata.com/api/v1/context/electricity-rates \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "state=CA" \
+  --data-urlencode "region_type=state" \
+  --data-urlencode "data_year=2023"
+```
+
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "records": [
+      {
+        "id": "elr_01hzka1bc2de3fg4hi5jk6qrst",
+        "source_document_id": "doc_01hzka1bc2de3fg4hi5jk6eia",
+        "region_type": "state",
+        "region_code": "CA",
+        "state_code": "CA",
+        "region_name": "California",
+        "data_year": 2023,
+        "effective_period": "2023-annual",
+        "residential_cents_per_kwh": 29.84,
+        "commercial_cents_per_kwh": 22.11,
+        "industrial_cents_per_kwh": 15.63,
+        "transportation_cents_per_kwh": null,
+        "total_cents_per_kwh": 24.52,
+        "residential_usd_per_kwh": 0.2984,
+        "commercial_usd_per_kwh": 0.2211,
+        "industrial_usd_per_kwh": 0.1563,
+        "transportation_usd_per_kwh": null,
+        "total_usd_per_kwh": 0.2452,
+        "source_url": "https://www.eia.gov/electricity/sales_revenue_price/",
+        "source_table": "Table 4",
+        "last_verified_at": "2024-08-01T00:00:00Z",
+        "applicable_trades": ["solar", "hvac", "electrical"],
+        "metadata": null,
+        "updated_at": "2024-08-15T10:00:00Z"
+      }
+    ],
+    "coverage": {
+      "source": "EIA Electric Sales, Revenue, and Average Price Table 4",
+      "latest_loaded_year": 2023,
+      "regions_returned": 1,
+      "quote_safe_only": false,
+      "usage_note": "EIA averages are market context only and should not be treated as customer tariff truth."
+    }
+  }
+}
+```

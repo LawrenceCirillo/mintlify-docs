@@ -1,0 +1,228 @@
+---
+title: "GET /api/v1/context/ahri-matches — System Ratings"
+sidebarTitle: "AHRI Matches"
+description: "Look up AHRI matched-system efficiency ratings by outdoor model, indoor model, or reference number. Returns SEER2, EER2, and HSPF2 with quote-safe flags."
+---
+
+The AHRI matches endpoint returns matched-system efficiency records for HVAC split systems, including SEER2, EER2, HSPF2, and capacity ratings at multiple outdoor temperatures. Records are sourced from the AHRI directory and ENERGY STAR matched-system lists. This endpoint requires at minimum **sandbox-level** dataset access to query, but `quote_safe: true` is only assigned to records that have resolved licensed AHRI data provenance, a certified status, an exact matched-system review, and no outstanding unresolved requirements. Certificate lookups, ENERGY STAR-derived rows, and contractor-uploaded records remain `quote_safe: false` until data rights are fully resolved.
+
+**Endpoint**
+
+```
+GET https://homeservicedata.com/api/v1/context/ahri-matches
+```
+
+<Warning>
+  **License gate applies.** AHRI matched-system data is subject to AHRI licensing terms. Records backed by licensed AHRI directory data return with `quote_safe: true` only when your account has the required data rights. Records derived from public ENERGY STAR exports, certificate URL scrapes, or contractor uploads always return with `quote_safe: false` regardless of account tier. Contact your account manager to upgrade your AHRI data access.
+</Warning>
+
+## Query Parameters
+
+<ParamField query="equipment_id" type="string">
+  HSD equipment record ID. Resolves the associated AHRI matches for a specific product in the HSD catalog. Recommended as the primary lookup method when building quotes from HSD equipment records.
+</ParamField>
+
+<ParamField query="ahri_reference_number" type="string">
+  AHRI certificate reference number. Exact match.
+</ParamField>
+
+<ParamField query="outdoor_model" type="string">
+  Outdoor unit model number. Partial match, case-insensitive.
+</ParamField>
+
+<ParamField query="indoor_model" type="string">
+  Indoor unit model number. Partial match, case-insensitive.
+</ParamField>
+
+<ParamField query="manufacturer" type="string">
+  Outdoor unit brand/manufacturer name. Partial match, case-insensitive.
+</ParamField>
+
+<ParamField query="status" type="string">
+  Filter by certification status. One of: `certified`, `candidate`, `superseded`, `unknown`.
+</ParamField>
+
+<ParamField query="quote_safe" type="boolean">
+  When `true`, returns only records with resolved AHRI data rights and full certification review. When `false`, returns context-only records.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="100">
+  Maximum number of records to return. Capped at `500`.
+</ParamField>
+
+## Response Fields
+
+<ResponseField name="records" type="array">
+  Array of AHRI matched-system objects.
+
+  <Expandable title="Record fields">
+    <ResponseField name="record_id" type="string">Unique record identifier.</ResponseField>
+    <ResponseField name="ahri_reference_number" type="string | null">AHRI certificate reference number.</ResponseField>
+
+    <ResponseField name="outdoor_unit" type="object">
+      Outdoor unit identifiers.
+      <Expandable title="outdoor_unit fields">
+        <ResponseField name="brand" type="string | null">Outdoor unit brand name.</ResponseField>
+        <ResponseField name="model" type="string | null">Outdoor unit model number.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="indoor_unit" type="object">
+      Indoor unit identifiers.
+      <Expandable title="indoor_unit fields">
+        <ResponseField name="brand" type="string | null">Indoor unit brand name.</ResponseField>
+        <ResponseField name="model" type="string | null">Indoor unit model number.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="system_type" type="string | null">System configuration: `split_ac`, `heat_pump`, `packaged`, or similar.</ResponseField>
+    <ResponseField name="refrigerant_type" type="string | null">Refrigerant designation (e.g., `R-410A`, `R-32`, `R-454B`).</ResponseField>
+
+    <ResponseField name="ratings" type="object">
+      Certified efficiency and capacity ratings.
+      <Expandable title="ratings fields">
+        <ResponseField name="seer2" type="number | null">SEER2 cooling efficiency rating.</ResponseField>
+        <ResponseField name="eer2" type="number | null">EER2 cooling efficiency rating.</ResponseField>
+        <ResponseField name="hspf2" type="number | null">HSPF2 heating efficiency rating (heat pumps only).</ResponseField>
+        <ResponseField name="cooling_capacity_btu_h" type="integer | null">Rated cooling capacity in BTU/h.</ResponseField>
+        <ResponseField name="heating_capacity_47f_btu_h" type="integer | null">Heating capacity at 47°F outdoor temp in BTU/h.</ResponseField>
+        <ResponseField name="heating_capacity_17f_btu_h" type="integer | null">Heating capacity at 17°F outdoor temp in BTU/h (cold-climate indicator).</ResponseField>
+        <ResponseField name="heating_capacity_5f_btu_h" type="integer | null">Heating capacity at 5°F outdoor temp in BTU/h.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="status" type="string | null">Certification status: `certified`, `candidate`, `superseded`, or `unknown`.</ResponseField>
+    <ResponseField name="energy_star_link_status" type="string | null">ENERGY STAR link resolution status for this record.</ResponseField>
+
+    <ResponseField name="verification" type="object">
+      Verification provenance details.
+      <Expandable title="verification fields">
+        <ResponseField name="source_kind" type="string">Source type: `ahri_licensed`, `energy_star_candidate`, `certificate_scrape`, or `contractor_upload`.</ResponseField>
+        <ResponseField name="exact_match" type="boolean">Whether the outdoor/indoor model combination was confirmed as an exact AHRI matched pair.</ResponseField>
+        <ResponseField name="certified_at" type="string | null">ISO 8601 timestamp when this combination was AHRI-certified.</ResponseField>
+        <ResponseField name="published_at" type="string | null">ISO 8601 timestamp when this record was published to the AHRI directory.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="unresolved_requirements" type="array">
+      List of outstanding conditions preventing quote_safe from being true. Common values: license_not_resolved, not_exact_match, status_candidate, missing_capacity_data.
+    </ResponseField>
+
+    <ResponseField name="quote_safe" type="boolean">
+      `true` only when: (1) licensed AHRI data provenance is confirmed, (2) status is `certified`, (3) `exact_match` is `true`, and (4) `unresolved_requirements` is empty.
+    </ResponseField>
+    <ResponseField name="confidence" type="string | null">Confidence tier: `high`, `medium`, or `low`.</ResponseField>
+
+    <ResponseField name="provenance" type="object">
+      Source traceability.
+      <Expandable title="provenance fields">
+        <ResponseField name="source_document_id" type="string | null">Internal source document reference.</ResponseField>
+        <ResponseField name="source_url" type="string | null">URL to the AHRI or ENERGY STAR source page.</ResponseField>
+        <ResponseField name="certificate_url" type="string | null">Direct URL to the AHRI certificate PDF, if available.</ResponseField>
+        <ResponseField name="last_verified_at" type="string | null">ISO 8601 timestamp of last verification.</ResponseField>
+        <ResponseField name="trust_basis" type="string">Always `ahri_match_context`.</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="coverage" type="object">
+  Query summary metadata.
+  <Expandable title="Coverage fields">
+    <ResponseField name="records_returned" type="integer">Number of records returned.</ResponseField>
+    <ResponseField name="quote_safe_only" type="boolean">Whether results were restricted to quote-safe records.</ResponseField>
+    <ResponseField name="status" type="string">Status filter applied, or `all` if none.</ResponseField>
+    <ResponseField name="trust_basis" type="string">Description of the multi-gate trust model for AHRI records.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Note>
+  When looking up AHRI matches for a specific equipment record in your quote workflow, supply `equipment_id` rather than raw model numbers. The API resolves the canonical model identifiers and returns the pre-matched set, reducing false positives from model number variant mismatches.
+</Note>
+
+## Example Request
+
+<CodeGroup>
+
+```bash By Equipment ID
+curl -G https://homeservicedata.com/api/v1/context/ahri-matches \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "equipment_id=eqp_01hzka1bc2de3fg4hi5jk6abcd" \
+  --data-urlencode "quote_safe=true"
+```
+
+```bash By Model Numbers
+curl -G https://homeservicedata.com/api/v1/context/ahri-matches \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "outdoor_model=24ACC636A003" \
+  --data-urlencode "manufacturer=Carrier" \
+  --data-urlencode "status=certified" \
+  --data-urlencode "limit=10"
+```
+
+```bash By AHRI Reference Number
+curl -G https://homeservicedata.com/api/v1/context/ahri-matches \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "ahri_reference_number=210191234"
+```
+
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "records": [
+      {
+        "record_id": "ahm_01hzka1bc2de3fg4hi5jk6efgh",
+        "ahri_reference_number": "210191234",
+        "outdoor_unit": {
+          "brand": "Carrier",
+          "model": "24ACC636A003"
+        },
+        "indoor_unit": {
+          "brand": "Carrier",
+          "model": "FV4CNF003"
+        },
+        "system_type": "split_ac",
+        "refrigerant_type": "R-410A",
+        "ratings": {
+          "seer2": 15.2,
+          "eer2": 12.5,
+          "hspf2": null,
+          "cooling_capacity_btu_h": 34800,
+          "heating_capacity_47f_btu_h": null,
+          "heating_capacity_17f_btu_h": null,
+          "heating_capacity_5f_btu_h": null
+        },
+        "status": "certified",
+        "energy_star_link_status": "matched",
+        "verification": {
+          "source_kind": "ahri_licensed",
+          "exact_match": true,
+          "certified_at": "2022-03-15T00:00:00Z",
+          "published_at": "2022-03-20T00:00:00Z"
+        },
+        "unresolved_requirements": [],
+        "quote_safe": true,
+        "confidence": "high",
+        "provenance": {
+          "source_document_id": "doc_01hzka1bc2de3fg4hi5ahri",
+          "source_url": "https://www.ahridirectory.org/",
+          "certificate_url": "https://www.ahridirectory.org/Certificate/210191234",
+          "last_verified_at": "2024-10-01T00:00:00Z",
+          "trust_basis": "ahri_match_context"
+        }
+      }
+    ],
+    "coverage": {
+      "records_returned": 1,
+      "quote_safe_only": true,
+      "status": "all",
+      "trust_basis": "Quote-safe AHRI rows require licensed AHRI data provenance, certified status, exact matched-system review, and no unresolved requirements; certificate lookups, ENERGY STAR-derived rows, and contractor uploads remain context until data rights are resolved."
+    }
+  }
+}
+```

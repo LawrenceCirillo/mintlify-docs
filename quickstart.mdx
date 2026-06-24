@@ -1,0 +1,93 @@
+---
+title: "Quick Start: Make Your First Home Service Data API Call"
+sidebarTitle: "Quickstart"
+description: "Learn how to make your first Home Service Data API call. Fetch verified finance programs and equipment data in under five minutes."
+---
+
+This guide walks you through making your first request to the Home Service Data API. By the end, you will have retrieved live finance program data filtered to a specific trade—proving your API key works and showing you the shape of a typical response.
+
+## Prerequisites
+
+- A Home Service Data account. [Request access](https://homeservicedata.com/contact) if you do not have one yet.
+- An API key from your dashboard [API Keys page](/dashboard/api-keys).
+
+<Steps>
+  <Step title="Get your API key">
+    Open your [Dashboard → API Keys](/dashboard/api-keys) page and copy an active key. Your key looks like `hsd_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`.
+  </Step>
+
+  <Step title="Make your first request">
+    Fetch current solar finance fee records by passing your key in the `x-api-key` header:
+
+    ```bash
+    curl -X GET "https://homeservicedata.com/api/v1/finance/fees?trade=solar" \
+      -H "x-api-key: YOUR_API_KEY"
+    ```
+
+    A successful response looks like:
+
+    ```json
+    {
+      "data": [
+        {
+          "finance_program_version_id": "fpv_abc123",
+          "financier_name": "Acme Lender",
+          "financier_slug": "acme-lender",
+          "product_title": "25-Year 0% APR",
+          "payment_type": "loan",
+          "term_months": 300,
+          "fee_percentage": 28.5,
+          "trade_category": "solar",
+          "quote_safe": true,
+          "last_verified_at": "2025-01-15T00:00:00Z"
+        }
+      ],
+      "error": null,
+      "meta": {
+        "endpoint": "/api/v1/finance/fees",
+        "duration_ms": 42
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Filter to your needs">
+    Add query parameters to narrow results. For example, fetch only HVAC finance programs from a specific lender:
+
+    ```bash
+    curl -X GET "https://homeservicedata.com/api/v1/finance/fees?trade=hvac&payment_type=loan" \
+      -H "x-api-key: YOUR_API_KEY"
+    ```
+  </Step>
+
+  <Step title="Check the quote_safe flag">
+    Before using any record in a customer-facing quote, verify `quote_safe: true`. Context-only rows (`quote_safe: false`) are useful for market research but should not appear in quotes.
+
+    ```typescript
+    const response = await fetch('https://homeservicedata.com/api/v1/finance/fees?trade=solar', {
+      headers: { 'x-api-key': process.env.HSD_API_KEY! }
+    });
+    const { data } = await response.json();
+
+    // Filter to only quote-safe rows before displaying to customers
+    const quoteSafePrograms = data.filter((row: any) => row.quote_safe === true);
+    ```
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Learn about API key scopes and how to manage keys.
+  </Card>
+  <Card title="Quote Context" icon="file-invoice-dollar" href="/api-reference/quote-context">
+    Bundle finance, equipment, and context data in a single call.
+  </Card>
+  <Card title="Sync Integration" icon="arrows-rotate" href="/guides/sync-integration">
+    Keep your database in sync with dataset snapshots and deltas.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/overview">
+    Explore all available endpoints.
+  </Card>
+</CardGroup>

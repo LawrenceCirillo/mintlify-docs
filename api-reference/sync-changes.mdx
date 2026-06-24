@@ -1,0 +1,314 @@
+---
+title: "GET /api/v1/sync/changes — Incremental Dataset Changes"
+sidebarTitle: "Sync Changes"
+description: "Fetch only the records that changed in a dataset since a given cursor, enabling lightweight delta sync without re-downloading full snapshots."
+---
+
+The `/api/v1/sync/changes` endpoint returns a ordered list of change events that occurred in a dataset after the point represented by a `since` cursor. This is the second half of the two-phase sync pattern: you call [`/api/v1/sync/snapshot`](/api-reference/sync-snapshot) once to load all current records and obtain an initial cursor, then poll `/api/v1/sync/changes` on a schedule to apply only the rows that have been inserted, updated, or deleted since your last poll. Each response includes a `latest_cursor` — replace your stored cursor with this value after every successful call so your next request picks up exactly where this one left off.
+
+Each change object carries an `operation` field (`upsert`, `delete`, or `supersede`) and a `payload` containing the full new record state for upserts. For deletions, `payload` is `null` and you should remove the record identified by `record_id` from your local store.
+
+## Request
+
+```
+GET https://homeservicedata.com/api/v1/sync/changes
+```
+
+### Authentication
+
+All requests must include your API key in the `x-api-key` header. The required access tier matches that of the corresponding snapshot endpoint for the requested dataset.
+
+### Query Parameters
+
+<ParamField query="dataset" type="string" required>
+  The dataset to fetch changes for. Must be one of the valid dataset keys:
+
+  `finance_fees`, `finance_products`, `finance_eligibility`, `equipment_pricing`, `utility_territory`, `electricity_rates`, `hvac_incentives`, `hvac_climate`, `hvac_labor`, `hvac_ahri_matches`.
+
+  See [Sync Snapshot](/api-reference/sync-snapshot) for full dataset descriptions.
+</ParamField>
+
+<ParamField query="since" type="string" required>
+  Cursor string from a previous snapshot or changes response. Use `sync.cursor` from a snapshot response or `latest_cursor` from a previous changes response. If you do not have a cursor yet, call [`/api/v1/sync/snapshot`](/api-reference/sync-snapshot) first to obtain one. Passing an invalid or expired cursor returns a `400` error.
+</ParamField>
+
+<ParamField query="trade" type="string">
+  Optional trade filter. When provided, only change events for that trade category are returned. Must be one of `solar`, `hvac`, `roofing`, `plumbing`, or `electrical`. Should match the trade filter you used when taking the original snapshot.
+</ParamField>
+
+<ParamField query="limit" type="integer">
+  Maximum number of change records to return per page. The ceiling varies by dataset. When the response `sync.has_more` is `true`, follow `sync.next_url` to retrieve the next page of changes before advancing your cursor.
+</ParamField>
+
+---
+
+## Change Operations
+
+Each item in the `changes` array carries an `operation` field that tells you how to apply it to your local dataset:
+
+| Operation | Meaning | Action |
+|-----------|---------|--------|
+| `upsert` | Record was inserted or updated | Insert or update the local record identified by `record_id` with the data in `payload` |
+| `delete` | Record was removed | Delete the local record identified by `record_id`; `payload` is `null` |
+| `supersede` | Record was replaced by a newer version | Replace the local record identified by `record_id` with `payload`; the old version is no longer valid for quoting |
+
+<Warning>
+  Always persist `latest_cursor` to durable storage **before** applying changes to your database. If your application crashes mid-apply and you have already advanced the cursor, you will miss those change events. A safe pattern is: store `latest_cursor` → apply changes in a transaction → commit. On restart, re-fetch changes from the stored cursor; the API is idempotent for the same cursor window.
+</Warning>
+
+---
+
+## Response
+
+<ResponseField name="data" type="object">
+  Top-level `data` envelope containing the delta payload.
+
+  <Expandable title="data">
+    <ResponseField name="dataset" type="object">
+      Metadata about the dataset this change set belongs to.
+
+      <Expandable title="dataset">
+        <ResponseField name="key" type="string">Dataset key (e.g. `finance_fees`).</ResponseField>
+        <ResponseField name="title" type="string">Human-readable dataset title.</ResponseField>
+        <ResponseField name="endpoint" type="string">Default REST endpoint for this dataset.</ResponseField>
+        <ResponseField name="source" type="string">Dataset source identifier for this change set.</ResponseField>
+        <ResponseField name="trade" type="string">Trade filter applied, or `"all"`.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="from_cursor" type="string">
+      The `since` cursor that was passed in. Useful for logging and debugging your sync pipeline.
+    </ResponseField>
+
+    <ResponseField name="latest_cursor" type="string">
+      The cursor representing the newest change included in this response. **Store this value and use it as `since` in your next request.** If `has_changes` is `false`, `latest_cursor` equals `from_cursor`.
+    </ResponseField>
+
+    <ResponseField name="has_changes" type="boolean">
+      `true` if the `changes` array contains one or more items, `false` otherwise. When `false`, your local dataset is already up to date as of `latest_cursor`.
+    </ResponseField>
+
+    <ResponseField name="changes" type="array">
+      Ordered list of change event objects. Empty when `has_changes` is `false`.
+
+      <Expandable title="change object">
+        <ResponseField name="id" type="string">UUID of this change event record.</ResponseField>
+        <ResponseField name="dataset_version_id" type="string">UUID of the dataset version that introduced this change.</ResponseField>
+        <ResponseField name="dataset_key" type="string">Dataset key this change belongs to (e.g. `finance_fees`).</ResponseField>
+        <ResponseField name="trade_category" type="string | null">Trade category for this record, or `null` for trade-agnostic datasets.</ResponseField>
+        <ResponseField name="operation" type="string">
+          The type of change: `upsert`, `delete`, or `supersede`. See the operations table above.
+        </ResponseField>
+        <ResponseField name="record_id" type="string">
+          Stable identifier for the affected record. Use this to locate and update (or delete) the corresponding row in your local store.
+        </ResponseField>
+        <ResponseField name="source_table" type="string">The dataset source identifier that originated this change record.</ResponseField>
+        <ResponseField name="record_updated_at" type="string">ISO 8601 timestamp of when the source record was last updated.</ResponseField>
+        <ResponseField name="payload" type="object | null">
+          Full record payload for `upsert` and `supersede` operations. Apply this object to your local store. `null` for `delete` operations.
+        </ResponseField>
+        <ResponseField name="created_at" type="string">ISO 8601 timestamp of when this change event was recorded in the sync log.</ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="sync" type="object">
+      Pagination and sync control metadata.
+
+      <Expandable title="sync">
+        <ResponseField name="mode" type="string">Always `"delta"` for this endpoint.</ResponseField>
+        <ResponseField name="limit" type="integer">The effective `limit` that was applied to this request.</ResponseField>
+        <ResponseField name="returned" type="integer">Number of change objects in the `changes` array for this response page.</ResponseField>
+        <ResponseField name="has_more" type="boolean">
+          `true` if additional change pages exist beyond this response. Follow `next_url` to retrieve the next page. Do **not** advance `latest_cursor` until `has_more` is `false`.
+        </ResponseField>
+        <ResponseField name="next_url" type="string">
+          Pre-built URL for the next request. When `has_more` is `false`, this URL is still valid — it will return an empty changes response and confirm you are up to date.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Examples
+
+<CodeGroup>
+```bash cURL — poll for changes
+curl -G https://homeservicedata.com/api/v1/sync/changes \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "dataset=finance_fees" \
+  --data-urlencode "since=v42:finance_fees:all"
+```
+
+```bash cURL — trade-filtered changes
+curl -G https://homeservicedata.com/api/v1/sync/changes \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "dataset=hvac_incentives" \
+  --data-urlencode "since=v17:hvac_incentives:hvac" \
+  --data-urlencode "trade=hvac" \
+  --data-urlencode "limit=100"
+```
+
+```bash cURL — paginate through large change sets
+# Page 1
+curl -G https://homeservicedata.com/api/v1/sync/changes \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "dataset=equipment_pricing" \
+  --data-urlencode "since=v8:equipment_pricing:all" \
+  --data-urlencode "limit=500"
+
+# If sync.has_more is true, follow sync.next_url directly:
+curl "https://homeservicedata.com/api/v1/sync/changes?dataset=equipment_pricing&since=v8%3Aequipment_pricing%3Aall%3A500" \
+  -H "x-api-key: YOUR_API_KEY"
+```
+</CodeGroup>
+
+### Response — changes present
+
+```json
+{
+  "data": {
+    "dataset": {
+      "key": "finance_fees",
+      "title": "Finance Fee Records",
+      "endpoint": "/api/v1/finance/fees",
+      "source": "current_finance_fee_records",
+      "trade": "all"
+    },
+    "from_cursor": "v42:finance_fees:all",
+    "latest_cursor": "v43:finance_fees:all",
+    "has_changes": true,
+    "changes": [
+      {
+        "id": "018f3c1a-0001-7e8f-0001-aabbccddeeff",
+        "dataset_version_id": "018f3c1a-0000-7e8f-0000-aabbccddeeff",
+        "dataset_key": "finance_fees",
+        "trade_category": "solar",
+        "operation": "upsert",
+        "record_id": "018f3a2b-0000-7e8f-0001-3b4c5d6e7f01",
+        "source_table": "current_finance_fee_records",
+        "record_updated_at": "2025-01-16T09:12:00.000Z",
+        "payload": {
+          "finance_program_version_id": "018f3a2b-0000-7e8f-0001-3b4c5d6e7f01",
+          "trade_category": "solar",
+          "financier_name": "GoodLeap",
+          "financier_slug": "goodleap",
+          "product_title": "GoodLeap 25-Year 5.49%",
+          "quote_safe": true
+        },
+        "created_at": "2025-01-16T09:14:33.000Z"
+      },
+      {
+        "id": "018f3c1a-0002-7e8f-0001-aabbccddeeff",
+        "dataset_version_id": "018f3c1a-0000-7e8f-0000-aabbccddeeff",
+        "dataset_key": "finance_fees",
+        "trade_category": "solar",
+        "operation": "delete",
+        "record_id": "018f3a2b-0000-7e8f-0001-3b4c5d6e7f99",
+        "source_table": "current_finance_fee_records",
+        "record_updated_at": "2025-01-16T09:12:00.000Z",
+        "payload": null,
+        "created_at": "2025-01-16T09:14:33.000Z"
+      },
+      {
+        "id": "018f3c1a-0003-7e8f-0001-aabbccddeeff",
+        "dataset_version_id": "018f3c1a-0000-7e8f-0000-aabbccddeeff",
+        "dataset_key": "finance_fees",
+        "trade_category": "solar",
+        "operation": "supersede",
+        "record_id": "018f3a2b-0000-7e8f-0001-3b4c5d6e7f50",
+        "source_table": "current_finance_fee_records",
+        "record_updated_at": "2025-01-16T09:12:00.000Z",
+        "payload": {
+          "finance_program_version_id": "018f3a2b-0000-7e8f-0001-3b4c5d6e7f50",
+          "trade_category": "solar",
+          "financier_name": "Mosaic",
+          "financier_slug": "mosaic",
+          "product_title": "Mosaic Classic 20-Year 6.49%",
+          "quote_safe": true
+        },
+        "created_at": "2025-01-16T09:14:33.000Z"
+      }
+    ],
+    "sync": {
+      "mode": "delta",
+      "limit": 1000,
+      "returned": 3,
+      "has_more": false,
+      "next_url": "/api/v1/sync/changes?dataset=finance_fees&since=v43%3Afinance_fees%3Aall"
+    }
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+### Response — no changes
+
+```json
+{
+  "data": {
+    "dataset": {
+      "key": "finance_fees",
+      "title": "Finance Fee Records",
+      "endpoint": "/api/v1/finance/fees",
+      "source": "current_finance_fee_records",
+      "trade": "all"
+    },
+    "from_cursor": "v43:finance_fees:all",
+    "latest_cursor": "v43:finance_fees:all",
+    "has_changes": false,
+    "changes": [],
+    "sync": {
+      "mode": "delta",
+      "limit": 1000,
+      "returned": 0,
+      "has_more": false,
+      "next_url": "/api/v1/sync/changes?dataset=finance_fees&since=v43%3Afinance_fees%3Aall"
+    }
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+---
+
+## Recommended Sync Loop
+
+```typescript
+async function syncDataset(dataset: string, storedCursor: string) {
+  let cursor = storedCursor;
+
+  do {
+    const res = await fetch(
+      `https://homeservicedata.com/api/v1/sync/changes?dataset=${dataset}&since=${encodeURIComponent(cursor)}`,
+      { headers: { "x-api-key": process.env.HSD_API_KEY } }
+    );
+    const { data } = await res.json();
+
+    // 1. Persist latest_cursor BEFORE applying changes
+    await db.saveCursor(dataset, data.latest_cursor);
+
+    // 2. Apply each change to your local store
+    for (const change of data.changes) {
+      if (change.operation === "delete") {
+        await db.delete(dataset, change.record_id);
+      } else {
+        await db.upsert(dataset, change.record_id, change.payload);
+      }
+    }
+
+    cursor = data.latest_cursor;
+    // Continue if there are more pages
+  } while (data.sync.has_more);
+}
+```
+
+---
+
+## Next Steps
+
+- Start here: take a full snapshot with [Sync Snapshot](/api-reference/sync-snapshot) to get your initial cursor and records.
+- Use the `sync.changes_url` from the snapshot response as your first changes URL — it's already URL-encoded with the correct cursor.

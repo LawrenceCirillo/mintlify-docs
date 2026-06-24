@@ -1,0 +1,217 @@
+---
+title: "Dataset Sync: Snapshots, Deltas, and Cursors Explained"
+sidebarTitle: "Sync Model"
+description: "Snapshot a dataset once, then poll for delta changes with a cursor. Your local store stays current without re-downloading the entire dataset on every poll."
+---
+
+Home Service Data is designed to run inside quoting tools, CRMs, and workflow systems that need fast local access to dataset records — not round-trip latency on every quote. The sync model lets you download a full dataset snapshot once, store a cursor that marks your position in dataset version history, and then poll for only the records that changed since that cursor. Your local store stays current without re-fetching thousands of rows on every poll cycle.
+
+## Core Concepts
+
+### Snapshot
+
+A **snapshot** is a complete download of all currently published records for a dataset. It represents the state of the dataset at the moment of the most recently published version. When you call the snapshot endpoint, you receive:
+
+- Every record in the current version of the dataset
+- A `version` object with the version number, publish timestamp, total row count, and quote-safe count
+- A `sync` object containing an `etag`, a `cursor` string, and a `changes_url` pointing to the delta endpoint pre-seeded with your new cursor
+
+Use the snapshot as your **initial seed** when you first integrate a dataset, or to perform a full reset if your local store diverges.
+
+### Delta / Changes
+
+A **delta** (or changes response) contains only the records that changed after a given cursor. Rather than returning full records for unchanged rows, it returns a list of `DatasetChange` objects — each carrying the record ID, the operation type, and the new payload (for upserts) or just the ID (for deletes).
+
+Delta responses also return a `latest_cursor` you should store to use as the `since` parameter on your next poll. If `has_changes` is `false`, no records changed since your cursor — store the `latest_cursor` anyway because it advances through empty version windows.
+
+### Cursor
+
+A **cursor** is an opaque string that represents a specific point in dataset version history. You should treat it as a token, not a timestamp or integer — its internal format may change between API versions.
+
+Cursors are stable: if you store a cursor from six months ago and pass it as `since`, the API returns all changes that occurred after that version. There is no cursor expiry window for standard polling intervals.
+
+<Note>
+  Never construct or parse a cursor value. Always store and replay the exact string returned by the API. Cursors from a `snapshot` response and from a `changes` response are interchangeable — they reference the same version namespace.
+</Note>
+
+## Supported Datasets
+
+You can sync any of the following dataset keys using the snapshot and changes endpoints:
+
+| Dataset Key | Trade | Description |
+|---|---|---|
+| `finance_fees` | solar, hvac, roofing, plumbing, electrical | Approved dealer-fee and finance-program rows |
+| `finance_products` | solar, hvac, roofing, plumbing, electrical | Lender and program quick-fact context |
+| `finance_eligibility` | solar, hvac, roofing, plumbing, electrical | Scoped lender/PACE eligible-product records |
+| `equipment_pricing` | solar, hvac, roofing, plumbing, electrical | Equipment and service price observations |
+| `utility_territory` | (all) | Utility providers and service territory context |
+| `electricity_rates` | (all) | Regional EIA/context electricity averages |
+| `hvac_incentives` | hvac | Program-level HVAC incentive records |
+| `hvac_climate` | hvac | County climate and weather-normal context |
+| `hvac_labor` | hvac | Labor and material adder catalog |
+| `hvac_ahri_matches` | hvac | AHRI/ENERGY STAR matched-system records |
+
+## Change Operation Types
+
+Every entry in a `changes` array carries an `operation` field with one of three values:
+
+| Operation | Meaning | What to do |
+|---|---|---|
+| `upsert` | The record was created or updated. The `payload` contains the full, current record. | Insert if new, replace if existing — keyed on `record_id`. |
+| `delete` | The record has been removed from the published dataset. The `payload` is `null`. | Remove the record from your local store by `record_id`. |
+| `supersede` | The record has been replaced by a newer version. The `payload` contains the replacement record. | Treat identically to `upsert` — replace by `record_id`. The old record is no longer valid. |
+
+<Warning>
+  Apply operations in the order they appear in the `changes` array. A single poll window may contain both an `upsert` and a later `delete` for the same `record_id`. Applying them out of order will leave a stale record in your store.
+</Warning>
+
+## The Sync Flow
+
+Follow these steps to keep a local dataset store current:
+
+<Steps>
+  <Step title="Fetch the snapshot">
+    Call the snapshot endpoint for your dataset. Store all returned records in your local store (database, cache, or in-memory map).
+
+    ```http
+    GET /api/v1/sync/snapshot?dataset=finance_fees&trade=solar
+    ```
+
+    ```json
+    {
+      "data": {
+        "sync": {
+          "mode": "snapshot",
+          "etag": "W/\"hsd:finance_fees:solar:dv_01JAFK8MQ3R2BVNP7SXZWYH1CG:1000\"",
+          "cursor": "dv_01JAFK8MQ3R2BVNP7SXZWYH1CG",
+          "changes_url": "/api/v1/sync/changes?dataset=finance_fees&since=dv_01JAFK8MQ3R2BVNP7SXZWYH1CG"
+        },
+        "version": {
+          "id": "dv_01JAFK8MQ3R2BVNP7SXZWYH1CG",
+          "number": 42,
+          "cursor": "dv_01JAFK8MQ3R2BVNP7SXZWYH1CG",
+          "published_at": "2025-01-20T12:00:00Z",
+          "row_count": 1240,
+          "quote_safe_count": 987
+        },
+        "records": [ /* ... all current records ... */ ]
+      }
+    }
+    ```
+  </Step>
+  <Step title="Store the cursor">
+    Persist `sync.cursor` alongside the records. You will pass this as the `since` parameter on your next poll. Associate the cursor with the dataset key and trade filter you used so you can look it up correctly.
+  </Step>
+  <Step title="Poll for changes">
+    On your polling schedule, call the changes endpoint with your stored cursor.
+
+    ```http
+    GET /api/v1/sync/changes?dataset=finance_fees&since=dv_01JAFK8MQ3R2BVNP7SXZWYH1CG
+    ```
+
+    ```json
+    {
+      "data": {
+        "from_cursor": "dv_01JAFK8MQ3R2BVNP7SXZWYH1CG",
+        "latest_cursor": "dv_01JB2K9NR4S3CWQP8TYAVXM0DH",
+        "has_changes": true,
+        "changes": [
+          {
+            "id": "chg_01JB2K9NR4S3CWQP8TYAVXM0DH",
+            "dataset_key": "finance_fees",
+            "operation": "upsert",
+            "record_id": "fpv_01J9K2MQ4N7PXRV8TZWFCB3DHL",
+            "record_updated_at": "2025-01-21T09:15:00Z",
+            "payload": { /* full updated record */ }
+          },
+          {
+            "id": "chg_01JB2K9NR5T4DXRQ9UZBWYN1EI",
+            "dataset_key": "finance_fees",
+            "operation": "delete",
+            "record_id": "fpv_01J8H1LP3M6OWQU7SYVEBZ2CFK",
+            "record_updated_at": "2025-01-21T09:15:00Z",
+            "payload": null
+          }
+        ],
+        "sync": {
+          "mode": "delta",
+          "limit": 500,
+          "returned": 2,
+          "next_url": null
+        }
+      }
+    }
+    ```
+  </Step>
+  <Step title="Apply upserts and deletes">
+    Iterate `changes` in order. For `upsert` and `supersede`, replace the record in your local store using `record_id` as the key. For `delete`, remove the record.
+  </Step>
+  <Step title="Store the new cursor">
+    Replace your stored cursor with `latest_cursor` from the changes response. This becomes your `since` value on the next poll. If `has_changes` was `false`, store the `latest_cursor` anyway — it may have advanced past empty version windows.
+  </Step>
+</Steps>
+
+## Using the TypeScript SDK
+
+The `hsd-client-sdk` handles snapshot fetching, cursor storage, cache management, and change application for you. You supply a cache adapter; the SDK updates it automatically on every sync call.
+
+```typescript
+import {
+  createHsdClient,
+  createLocalStorageCacheAdapter,
+} from "hsd-client-sdk";
+
+const client = createHsdClient({
+  apiKey: process.env.HSD_API_KEY!,
+  baseUrl: "https://api.homeservicedata.com",
+  cache: createLocalStorageCacheAdapter("my-app-sync"),
+});
+
+// Initial seed — fetches snapshot, stores cursor in cache
+const snapshot = await client.getSnapshot("finance_fees", {
+  trade: "solar",
+  quoteSafeOnly: true,
+});
+console.log(`Loaded ${snapshot.records.length} quote-safe records`);
+
+// Later — poll for incremental changes
+const stored = await client.getCachedSnapshot("finance_fees", { trade: "solar" });
+if (stored?.cursor) {
+  const delta = await client.getChanges("finance_fees", stored.cursor, {
+    trade: "solar",
+    quoteSafeOnly: true,
+  });
+  console.log(`Applied ${delta.changes.length} changes`);
+  // Cache is automatically updated with new records and latest_cursor
+}
+```
+
+<Tip>
+  Use `MemoryHsdCacheAdapter` for serverless functions where you want each invocation to start fresh, and `createLocalStorageCacheAdapter` for browser-based applications that should persist the cache across page loads.
+</Tip>
+
+## ETag Headers and Conditional GET
+
+The snapshot endpoint returns an `ETag` response header whose value matches `sync.etag` in the response body. On subsequent requests, you can pass this value as `If-None-Match` to receive a `304 Not Modified` response when the dataset version has not changed since your last fetch — saving bandwidth and processing time.
+
+```http
+GET /api/v1/sync/snapshot?dataset=finance_fees
+If-None-Match: W/"hsd:finance_fees:all:dv_01JAFK8MQ3R2BVNP7SXZWYH1CG:1000"
+```
+
+```http
+HTTP/1.1 304 Not Modified
+ETag: W/"hsd:finance_fees:all:dv_01JAFK8MQ3R2BVNP7SXZWYH1CG:1000"
+```
+
+When you receive `304`, your local store is already current. No body is returned and no cursor update is needed. Always pass the ETag value exactly as returned by the API — including the `W/` prefix and the surrounding double-quotes.
+
+<Note>
+  ETags and the delta endpoint serve different use cases. Use ETags for snapshot polling when you want to avoid re-processing an unchanged full dataset. Use the delta endpoint when you need to know exactly which records changed and want to apply targeted updates.
+</Note>
+
+## Pagination on Large Change Sets
+
+If more changes exist than the default page limit, the `sync.next_url` field in the changes response contains a pre-built URL for the next page. Continue following `next_url` until it is `null`, then store the final `latest_cursor`.
+
+For full API parameter documentation, see the [Sync Snapshot reference](/api-reference/sync-snapshot) and [Sync Changes reference](/api-reference/sync-changes).

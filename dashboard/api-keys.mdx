@@ -1,0 +1,95 @@
+---
+title: "Create, Scope, and Revoke Home Service Data API Keys"
+sidebarTitle: "API Keys"
+description: "Create, scope, and revoke API keys from the dashboard to control which datasets and access levels each application or environment can reach."
+---
+
+The API Keys page is where you create and manage the credentials that authenticate your applications against the Home Service Data API. Each key is independently scoped to specific datasets and access levels, so you have precise control over what any given application — or any given environment — can see and retrieve. Good key hygiene starts here: create a separate key for every application and environment, scope each one as narrowly as the use case allows, and revoke immediately when a key is no longer needed.
+
+## Creating an API Key
+
+<Steps>
+  <Step title="Open the API Keys page">
+    Navigate to [https://homeservicedata.com/dashboard](https://homeservicedata.com/dashboard) and select **API Keys** from the left sidebar.
+  </Step>
+  <Step title="Start a new key">
+    Click **Create Key** to open the key configuration panel.
+  </Step>
+  <Step title="Label the key">
+    Give the key a descriptive label that identifies its application and environment — for example `quoting-tool-production` or `crm-integration-staging`. Labels are for your reference only and are not transmitted with API requests.
+  </Step>
+  <Step title="Select dataset scopes">
+    Choose which datasets this key can access. By default, a new key has no dataset scopes assigned. Add only the packets your application actually calls — for example, a quoting tool that uses finance fees and equipment pricing should be scoped to `finance_fees` and `equipment_pricing` only, not every available dataset.
+  </Step>
+  <Step title="Set the access level per dataset">
+    For each scoped dataset, choose the access level the key may use. The key's effective access is the lower of its configured level and your workspace's entitlement for that packet — you cannot grant a key more access than your organization holds.
+  </Step>
+  <Step title="Set a quota (optional)">
+    Optionally configure a request quota — a maximum number of API calls this key may make within a rolling window. Quotas let you protect downstream budget and catch runaway clients before they exhaust rate limits.
+  </Step>
+  <Step title="Copy the key">
+    Click **Create**. The full key value is displayed **once** in a copy dialog. Copy it now and store it securely. After you dismiss this dialog, the dashboard will only show a redacted prefix for this key.
+  </Step>
+</Steps>
+
+<Warning>
+  The complete API key is only visible at the moment of creation. Once you close the creation dialog, the dashboard permanently masks the key — you cannot retrieve the full value again. If you lose the key before storing it, you must revoke it and create a replacement.
+</Warning>
+
+## Access Levels
+
+Every dataset scope on a key carries one of four access levels. These levels are enforced at request time and match the entitlement model used throughout the platform.
+
+| Level | Description |
+|---|---|
+| **none** | The key has no access to this dataset. Requests to the associated endpoint are rejected with a `403` response. This is the default for any dataset not explicitly added to the key's scope. |
+| **sample** | The key may retrieve a small, fixed sample of records from this dataset. Useful for evaluating schema and field structure in a real environment without exposing full data. |
+| **sandbox** | The key may access a realistic but non-production slice of the dataset. Intended for integration testing and staging environments where you need representative data without full production exposure. |
+| **production** | The key has full access to the current published snapshot of this dataset, including all quote-safe records up to the endpoint's maximum limit. Use this level only for keys deployed in live production applications. |
+
+<Note>
+  A key's effective access level is always the **lower** of its configured scope level and your workspace's entitlement for that dataset. If your workspace holds `sandbox` entitlement and you configure a key at `production`, the key will behave as `sandbox` until your workspace entitlement is upgraded. See [Access Levels](/concepts/access-levels) for the full entitlement model.
+</Note>
+
+## Key List and Last-Used Context
+
+The API Keys page lists every active key in your workspace. For each key you can see:
+
+- **Label** — the name you assigned at creation
+- **Redacted key prefix** — the first characters of the key, enough to identify it without exposing the secret
+- **Dataset scopes** — the datasets and access levels this key is permitted to use
+- **Last used** — the timestamp and endpoint of the most recent authenticated request made with this key
+
+The last-used context is particularly useful for auditing: if a key has not been used recently and you do not recognize its label, it is a good candidate for revocation. If a key shows unexpected endpoint activity, investigate before rotating.
+
+## Revoking a Key
+
+To permanently disable a key, open its row in the API Keys list and click **Revoke**. You will be asked to confirm the action. Revocation is immediate and irreversible — any application using that key will begin receiving authentication errors on its next request. Create a replacement key and update your application's environment configuration before revoking a key that is actively in use.
+
+## Best Practices
+
+Following a few simple practices significantly reduces the risk surface of your API key usage:
+
+<CardGroup cols={2}>
+  <Card title="One key per application and environment" icon="key">
+    Create a dedicated key for every distinct application (quoting tool, CRM, workflow system) and every environment (development, staging, production). This way a compromised key affects only one surface and can be revoked without disrupting others.
+  </Card>
+  <Card title="Scope as narrowly as possible" icon="shield">
+    Add only the dataset scopes your application genuinely calls. A quoting tool that uses finance data has no business holding access to utility territory or climate context. Narrow scopes limit blast radius if a key is misused.
+  </Card>
+  <Card title="Store keys in environment variables" icon="server">
+    Never hardcode a key in source code, configuration files, or client-side bundles. Store keys in environment variables or a secrets manager and inject them at runtime. This keeps keys out of version control and build artifacts.
+  </Card>
+  <Card title="Never share keys" icon="eye-slash">
+    Each key is a bearer credential — whoever holds it can make API calls as your workspace. Do not share keys in Slack, email, documentation, or any channel that might be logged or forwarded. Rotate immediately if you suspect a key has been exposed.
+  </Card>
+</CardGroup>
+
+<Tip>
+  After creating a new key, open the [Playground](/dashboard/playground) and select that key to run a test call. The Playground's scope diagnosis panel will confirm that the key's dataset scopes and access levels are configured exactly as you intended before you deploy it to an application.
+</Tip>
+
+## Related Pages
+
+- [Authentication](/authentication) — how to include your API key in requests and understand authentication errors
+- [Access Levels](/concepts/access-levels) — full explanation of the none / sample / sandbox / production entitlement model and how key scopes interact with workspace entitlement

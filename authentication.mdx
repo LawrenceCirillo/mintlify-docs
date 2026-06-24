@@ -1,0 +1,94 @@
+---
+title: "Authentication: API Keys and Access Scopes Explained"
+sidebarTitle: "Authentication"
+description: "Home Service Data uses API keys for authentication. Learn how to create keys, pass them in requests, and understand access level scopes."
+---
+
+Every request to the Home Service Data API requires an API key passed in the `x-api-key` request header. Keys are created and managed from your Dashboard and can be scoped to specific datasets and access levels.
+
+## Creating an API key
+
+1. Sign in to your [Dashboard](https://homeservicedata.com/dashboard).
+2. Navigate to [API Keys](/dashboard/api-keys).
+3. Click **Create key** and give it a descriptive label (for example, "Production quoting app").
+4. Copy the key immediately — it will not be shown again in full.
+5. Optionally restrict the key to specific datasets and set a quota.
+
+<Warning>
+  Treat your API key like a password. Never commit it to source control or include it in client-side code. Use environment variables or a secrets manager.
+</Warning>
+
+## Passing your key in requests
+
+Include your key in the `x-api-key` header on every request:
+
+```bash
+curl -X GET "https://homeservicedata.com/api/v1/finance/fees?trade=solar" \
+  -H "x-api-key: YOUR_API_KEY"
+```
+
+```typescript
+const response = await fetch('https://homeservicedata.com/api/v1/finance/fees?trade=solar', {
+  headers: {
+    'x-api-key': process.env.HSD_API_KEY!
+  }
+});
+```
+
+## Access levels
+
+Each API key can be granted one of four access levels per dataset:
+
+| Level | Description |
+|---|---|
+| `none` | No access to this dataset |
+| `sample` | Read a small sample of records (useful for testing data shape) |
+| `sandbox` | Read a broader set of records in a testing context |
+| `production` | Full access to all published, quote-safe records |
+
+Your account's entitlement determines the maximum level you can grant to a key. You can create keys with a lower level than your entitlement — for example, a `sample` key to share with a developer who is evaluating the API.
+
+<Note>
+  Production-level access is required to use data in live customer quotes. See [Access Levels](/concepts/access-levels) for the full policy.
+</Note>
+
+## Rate limits and quotas
+
+Every key has a monthly request quota set when it is created. Requests that exceed the quota return a `429 Too Many Requests` response. Some endpoints (such as utility territory resolution) also have per-minute request budgets.
+
+Rate limit headers are included in every response:
+
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 842
+X-RateLimit-Reset: 1706745600
+```
+
+## Authentication errors
+
+| HTTP status | Meaning |
+|---|---|
+| `401 Unauthorized` | Key is missing, malformed, or revoked |
+| `403 Forbidden` | Key exists but does not have access to the requested dataset at the required level |
+| `429 Too Many Requests` | Monthly quota or per-minute rate limit exceeded |
+
+```json
+{
+  "data": null,
+  "error": "API key does not have production access to finance_fees.",
+  "meta": null
+}
+```
+
+## Managing keys
+
+From the [API Keys dashboard page](/dashboard/api-keys) you can:
+
+- View the label, last-used date, and access scope for each key
+- Revoke a key immediately
+- Create replacement keys with adjusted scopes
+- Set per-key quotas
+
+<Tip>
+  Create separate keys for each environment (development, staging, production). Revoke and rotate keys whenever team members change.
+</Tip>

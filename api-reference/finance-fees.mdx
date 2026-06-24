@@ -1,0 +1,237 @@
+---
+title: "GET /api/v1/finance/fees — Dealer Fee Records"
+sidebarTitle: "Finance Fees"
+description: "Retrieve quote-safe dealer-fee and finance-program rows for solar, HVAC, and other home-service quoting tools. Requires production access."
+---
+
+The `/api/v1/finance/fees` endpoint returns approved, quote-safe dealer-fee and finance-program rows from the `finance_fees` dataset. Every row returned has `quote_safe: true`, meaning it has passed verification review and is cleared for use in customer-facing quote calculations. Results are ordered by `financier_name` then `product_title` and reflect the most recently verified version of each fee record.
+
+<Note>
+  This endpoint requires **production** access to the `finance_fees` dataset. Sandbox-tier keys will receive a `403` response. [Request access →](https://homeservicedata.com/contact)
+</Note>
+
+## Endpoint
+
+```
+GET https://homeservicedata.com/api/v1/finance/fees
+```
+
+## Request
+
+### Headers
+
+<ParamField header="x-api-key" type="string" required>
+  Your API key. Pass the value exactly as shown in your [dashboard](https://homeservicedata.com/dashboard).
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="trade" type="string">
+  Filter by trade category. Matched against the `trade_category` field (case-insensitive). Accepted values: `solar`, `hvac`, `roofing`, `plumbing`, `electrical`.
+</ParamField>
+
+<ParamField query="financier" type="string">
+  Filter by financier slug (e.g. `goodleap`, `sunlight_financial`). Matched against the `financier_slug` field.
+</ParamField>
+
+<ParamField query="payment_type" type="string">
+  Filter by payment product type. Matched against the `payment_type` field (case-insensitive). Common values: `loan`, `lease`, `ppa`, `cash`.
+</ParamField>
+
+<ParamField query="term_months" type="integer">
+  Exact term filter in months (e.g. `120`, `180`, `240`). Must be a valid integer or the request returns a `400` error.
+</ParamField>
+
+<ParamField query="interest_rate" type="number">
+  Exact interest rate filter as a decimal (e.g. `0.0` for 0% promos). Must be a valid number or the request returns a `400` error.
+</ParamField>
+
+<ParamField query="limit" type="integer">
+  Maximum number of records to return. Defaults to `1000`; hard cap is `5000`.
+</ParamField>
+
+## Response
+
+A successful response returns an `application/json` object with a top-level `data` array of dealer-fee records and a `usage` block for your request metering.
+
+### Response Fields
+
+<ResponseField name="data" type="array">
+  Array of dealer-fee record objects. Every object in this array has `quote_safe: true`.
+
+  <Expandable title="DealerFeeRecord fields">
+    <ResponseField name="finance_program_version_id" type="string">
+      Stable UUID for this version of the finance program row. Use this as the primary record identifier.
+    </ResponseField>
+
+    <ResponseField name="dealer_fee_version_id" type="string">
+      UUID for this version of the dealer-fee entry. Distinct from `finance_program_version_id` — a single finance program can have multiple dealer-fee versions over time.
+    </ResponseField>
+
+    <ResponseField name="source_document_id" type="string | null">
+      ID of the source document from which this record was extracted, if available.
+    </ResponseField>
+
+    <ResponseField name="trade_category" type="string">
+      The trade this fee record applies to. One of: `solar`, `hvac`, `roofing`, `plumbing`, `electrical`.
+    </ResponseField>
+
+    <ResponseField name="financier_name" type="string">
+      Display name of the lender or financing company (e.g. `GoodLeap`, `Sunlight Financial`).
+    </ResponseField>
+
+    <ResponseField name="financier_slug" type="string">
+      URL-safe identifier for the financier. Use this value in the `financier` query parameter.
+    </ResponseField>
+
+    <ResponseField name="product_title" type="string">
+      The lender's own product name for this fee row (e.g. `GoodLeap 2.99% 20yr`).
+    </ResponseField>
+
+    <ResponseField name="payment_type" type="string">
+      Product category. Common values: `loan`, `lease`, `ppa`, `cash`.
+    </ResponseField>
+
+    <ResponseField name="integration" type="string | null">
+      Integration platform or channel associated with this fee row (e.g. `solar_nexus`, `enerflo`), if applicable.
+    </ResponseField>
+
+    <ResponseField name="interest_rate" type="number | null">
+      Nominal annual interest rate as a decimal (e.g. `0.0299` for 2.99%). `null` for products where a fixed rate is not applicable.
+    </ResponseField>
+
+    <ResponseField name="term_months" type="integer | null">
+      Loan or lease term length in months. `null` when not applicable (e.g. cash products).
+    </ResponseField>
+
+    <ResponseField name="fee_percentage" type="number | null">
+      Dealer fee as a percentage of the financed amount (e.g. `0.25` for 25%). `null` when no dealer fee applies.
+    </ResponseField>
+
+    <ResponseField name="effective_date" type="string">
+      ISO 8601 date on which this fee record became effective (`YYYY-MM-DD`).
+    </ResponseField>
+
+    <ResponseField name="expires_at" type="string | null">
+      ISO 8601 datetime after which this fee record is no longer valid. `null` if there is no scheduled expiry.
+    </ResponseField>
+
+    <ResponseField name="last_verified_at" type="string">
+      ISO 8601 datetime when this record was last confirmed against a source document.
+    </ResponseField>
+
+    <ResponseField name="quote_safe" type="boolean">
+      Always `true` for records returned by this endpoint. Records that have not passed verification review are excluded from results.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  Request metering information tied to your API key.
+
+  <Expandable title="usage fields">
+    <ResponseField name="endpoint" type="string">
+      The endpoint path that was called.
+    </ResponseField>
+    <ResponseField name="status_code" type="integer">
+      HTTP status code of the response.
+    </ResponseField>
+    <ResponseField name="duration_ms" type="number">
+      Server-side processing time in milliseconds.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://homeservicedata.com/api/v1/finance/fees \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "trade=solar"
+```
+
+```python Python
+import requests
+
+resp = requests.get(
+    "https://homeservicedata.com/api/v1/finance/fees",
+    headers={"x-api-key": "YOUR_API_KEY"},
+    params={"trade": "solar"},
+)
+records = resp.json()["data"]
+```
+
+```javascript JavaScript
+const res = await fetch(
+  "https://homeservicedata.com/api/v1/finance/fees?trade=solar",
+  { headers: { "x-api-key": "YOUR_API_KEY" } }
+);
+const { data: records } = await res.json();
+```
+
+</CodeGroup>
+
+### Example Response
+
+```json
+{
+  "data": [
+    {
+      "finance_program_version_id": "c3d2e1f0-aaaa-bbbb-cccc-000000000001",
+      "dealer_fee_version_id": "d4e3f2a1-bbbb-cccc-dddd-000000000002",
+      "source_document_id": "src_abc123",
+      "trade_category": "solar",
+      "financier_name": "GoodLeap",
+      "financier_slug": "goodleap",
+      "product_title": "GoodLeap 2.99% 20yr",
+      "payment_type": "loan",
+      "integration": "enerflo",
+      "interest_rate": 0.0299,
+      "term_months": 240,
+      "fee_percentage": 0.25,
+      "effective_date": "2024-01-01",
+      "expires_at": null,
+      "last_verified_at": "2024-11-15T08:00:00.000Z",
+      "quote_safe": true
+    },
+    {
+      "finance_program_version_id": "a1b2c3d4-eeee-ffff-0000-111111111111",
+      "dealer_fee_version_id": "b2c3d4e5-ffff-0000-1111-222222222222",
+      "source_document_id": "src_def456",
+      "trade_category": "solar",
+      "financier_name": "Sunlight Financial",
+      "financier_slug": "sunlight_financial",
+      "product_title": "Sunlight 0% 12yr",
+      "payment_type": "loan",
+      "integration": null,
+      "interest_rate": 0.0,
+      "term_months": 144,
+      "fee_percentage": 0.36,
+      "effective_date": "2024-03-01",
+      "expires_at": "2025-03-01T00:00:00.000Z",
+      "last_verified_at": "2024-10-20T12:30:00.000Z",
+      "quote_safe": true
+    }
+  ],
+  "usage": {
+    "endpoint": "/api/v1/finance/fees",
+    "status_code": 200,
+    "duration_ms": 43
+  }
+}
+```
+
+## Error Reference
+
+| Status | Cause |
+|--------|-------|
+| `400`  | `term_months` or `interest_rate` is not a valid number. |
+| `401`  | Missing or invalid `x-api-key` header. |
+| `403`  | Your key does not have production access to the `finance_fees` dataset. |
+| `500`  | Internal server error — contact support if this persists. |
+
+<Tip>
+  Pair `term_months` with `interest_rate` to look up a single canonical fee row for a specific product configuration. For broader lender context — loan limits, APR ranges, and eligible measures — use [`GET /api/v1/context/finance-products`](/api-reference/finance-products).
+</Tip>

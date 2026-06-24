@@ -1,0 +1,199 @@
+---
+title: "GET /api/v1/hardware/inverters — Solar Inverter Data"
+sidebarTitle: "Inverters"
+description: "Retrieve paginated solar inverter specs, SKU-level pricing context, and cost adjustment fields for use in quoting and CRM workflows."
+---
+
+The `/api/v1/hardware/inverters` endpoint returns a paginated list of solar inverter products joined with inverter-specific cost adjustment data. Each record includes the manufacturer SKU, a base cost, and four adjustment fields that quoting engines use to compute the final installed price: a flat `price_adjustment`, a per-watt multiplier, a per-panel increment, and a labor adder. Records also carry an `is_archived` flag so integrations can decide whether to surface discontinued products to end users.
+
+## Endpoint
+
+```
+GET https://homeservicedata.com/api/v1/hardware/inverters
+```
+
+## Authentication
+
+All requests must include a valid API key in the `x-api-key` header. Access to inverter data requires the **hardware** dataset to be enabled on your account.
+
+<ParamField header="x-api-key" type="string" required>
+  Your secret API key. Generate or rotate keys from the dashboard under **Settings → API Keys**.
+</ParamField>
+
+<Warning>
+  Never expose your API key in client-side code or public repositories. All requests should originate from your server.
+</Warning>
+
+## Query Parameters
+
+<ParamField query="page" type="integer">
+  Page number to return. Defaults to `1`. Must be a positive integer.
+</ParamField>
+
+<ParamField query="per_page" type="integer">
+  Number of records per page. Defaults to `25`. Maximum is `100`.
+</ParamField>
+
+<ParamField query="code" type="string">
+  Partial SKU match. Case-insensitive substring search against the `sku` field. For example, `IQ8` returns all SKUs containing that string.
+</ParamField>
+
+<ParamField query="manufacturer" type="string">
+  Filter by manufacturer name. Case-insensitive substring match. For example, `Enphase` returns all Enphase products.
+</ParamField>
+
+<ParamField query="is_default" type="boolean">
+  Filter records by their default-product flag. Pass `true` to return only the preferred inverter in each product family, or `false` to exclude defaults. Omit this parameter to return all records regardless of flag.
+</ParamField>
+
+<Note>
+  The `is_default` filter is applied after the database join rather than in the initial query. Very large result sets filtered down by `is_default` will still consume the full per-page database read; prefer combining it with `manufacturer` when possible.
+</Note>
+
+## Response Fields
+
+A successful `200` response returns an `data` array of inverter record objects and a `meta` pagination envelope.
+
+### Pagination (`meta`)
+
+<ResponseField name="meta" type="object">
+  <Expandable title="Pagination metadata">
+    <ResponseField name="page" type="integer">
+      The current page number returned.
+    </ResponseField>
+    <ResponseField name="per_page" type="integer">
+      The number of records requested per page.
+    </ResponseField>
+    <ResponseField name="total" type="integer">
+      Total number of records matching the applied filters across all pages.
+    </ResponseField>
+    <ResponseField name="total_pages" type="integer">
+      Total number of pages at the current `per_page` size. Computed as `ceil(total / per_page)`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Inverter Record (`data[]`)
+
+<ResponseField name="id" type="string">
+  Internal UUID for this inverter product. Stable across updates to other fields.
+</ResponseField>
+
+<ResponseField name="manufacturer" type="string">
+  Brand name of the inverter manufacturer, e.g. `"Enphase"`, `"SolarEdge"`, or `"SMA"`.
+</ResponseField>
+
+<ResponseField name="sku" type="string">
+  The manufacturer's product SKU or model code, e.g. `"IQ8A-72-2-US"`. Results are returned sorted by `sku` ascending.
+</ResponseField>
+
+<ResponseField name="base_cost" type="number">
+  Wholesale base cost of the inverter in USD. This is the starting point before any per-watt, per-panel, or labor adjustments are applied.
+</ResponseField>
+
+<ResponseField name="is_archived" type="boolean">
+  When `true`, the product has been discontinued or hidden from active quoting. Archived records are included in responses by default; filter them out in your integration if required.
+</ResponseField>
+
+<ResponseField name="external_id" type="integer | null">
+  An optional numeric identifier used to cross-reference this inverter in external systems. `null` when no mapping exists.
+</ResponseField>
+
+<ResponseField name="is_default" type="boolean">
+  Indicates whether this inverter is the preferred or default selection within its product family. Useful for pre-populating quote forms.
+</ResponseField>
+
+<ResponseField name="price_adjustment" type="number">
+  Flat dollar adjustment added to `base_cost` to arrive at the quoted inverter price. Can be positive (markup) or negative (discount).
+</ResponseField>
+
+<ResponseField name="price_adjustment_per_watt" type="number">
+  Additional cost in USD per watt of system capacity. Multiply by the system's wattage and add to the base total. Defaults to `0` if no per-watt adjustment applies.
+</ResponseField>
+
+<ResponseField name="price_adjustment_per_panel" type="number">
+  Additional cost in USD per panel in the array. Multiply by panel count and add to the base total. Defaults to `0`.
+</ResponseField>
+
+<ResponseField name="labor_adjustment" type="number">
+  Dollar amount added to labor cost for this inverter type, typically to account for installation complexity differences between microinverter and string inverter designs. Defaults to `0`.
+</ResponseField>
+
+<Tip>
+  To compute the full estimated inverter cost for a quote, apply: `base_cost + price_adjustment + (price_adjustment_per_watt × system_watts) + (price_adjustment_per_panel × panel_count) + labor_adjustment`.
+</Tip>
+
+## Example Requests & Responses
+
+<CodeGroup>
+```bash All inverters (first page)
+curl https://homeservicedata.com/api/v1/hardware/inverters \
+  -H "x-api-key: YOUR_API_KEY"
+```
+
+```bash Filter by manufacturer
+curl "https://homeservicedata.com/api/v1/hardware/inverters?manufacturer=Enphase&per_page=50" \
+  -H "x-api-key: YOUR_API_KEY"
+```
+
+```bash Partial SKU search
+curl "https://homeservicedata.com/api/v1/hardware/inverters?code=IQ8&is_default=true" \
+  -H "x-api-key: YOUR_API_KEY"
+```
+
+```bash Page 2 with custom page size
+curl "https://homeservicedata.com/api/v1/hardware/inverters?page=2&per_page=10" \
+  -H "x-api-key: YOUR_API_KEY"
+```
+</CodeGroup>
+
+### Response Example
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "manufacturer": "Enphase",
+      "sku": "IQ8A-72-2-US",
+      "base_cost": 148.50,
+      "is_archived": false,
+      "external_id": 10042,
+      "is_default": true,
+      "price_adjustment": 0.00,
+      "price_adjustment_per_watt": 0.0250,
+      "price_adjustment_per_panel": 5.00,
+      "labor_adjustment": 12.00
+    },
+    {
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "manufacturer": "SolarEdge",
+      "sku": "SE7600H-US",
+      "base_cost": 1020.00,
+      "is_archived": false,
+      "external_id": 10091,
+      "is_default": false,
+      "price_adjustment": 50.00,
+      "price_adjustment_per_watt": 0.0000,
+      "price_adjustment_per_panel": 0.00,
+      "labor_adjustment": 0.00
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "per_page": 25,
+    "total": 84,
+    "total_pages": 4
+  }
+}
+```
+
+## Error Responses
+
+| HTTP Status | Cause |
+|---|---|
+| `400 Bad Request` | Malformed query parameter value (e.g. non-numeric `page`). |
+| `401 Unauthorized` | Missing or invalid `x-api-key` header. |
+| `403 Forbidden` | Your API key does not have access to the hardware dataset. |
+| `500 Internal Server Error` | Unexpected server-side error — contact support if persistent. |

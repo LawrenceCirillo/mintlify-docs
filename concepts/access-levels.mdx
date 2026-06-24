@@ -1,0 +1,98 @@
+---
+title: "API Access Levels: Sample, Sandbox, and Production"
+sidebarTitle: "Access Levels"
+description: "none, sample, sandbox, and production scope your API key's data access. Entitlement sets the ceiling; keys can be narrowed to any lower level."
+---
+
+Every request you make to Home Service Data is evaluated against an **access level** — a ranked permission tier that controls what data you can retrieve, how many records you can receive, and whether quote-safe records are available for live use. Your account holds an **entitlement** that sets the maximum level you can reach. Within that ceiling, you can create API keys scoped to any level at or below your entitlement, so you can always issue lower-privilege keys for development, staging, or partner integrations without exposing your full access.
+
+## The Four Access Levels
+
+Access levels are ranked numerically from 0 to 3. A higher rank always includes the capabilities of all lower ranks.
+
+| Level | Rank | What You Get | Typical Use |
+|---|---|---|---|
+| `none` | 0 | No data access. All data endpoints return an authorization error. | Default state before any access is granted or for explicitly revoked keys. |
+| `sample` | 1 | A small, static sample of records per dataset — enough to validate your schema and test parsing logic. Records may be anonymized or truncated. Quote-safe filtering is available but the sample set is limited. | Initial integration scaffolding, schema validation, CI fixture generation. |
+| `sandbox` | 2 | Full dataset shape with realistic but non-production records. Larger record counts, full field sets, and representative data for all supported trades. Not cleared for use in live customer quotes. | End-to-end integration testing, UAT, staging environments, demo builds. |
+| `production` | 3 | The complete, current, reviewed dataset. All `quote_safe: true` records are available. Required for any live customer-facing quote, payment calculation, or rate display. | Production quoting tools, CRMs, live workflow automation, customer-facing APIs. |
+
+<Note>
+  The numeric ranks (`none: 0`, `sample: 1`, `sandbox: 2`, `production: 3`) are the authoritative comparison values the platform uses when evaluating whether a key can access a given endpoint. A key at rank 2 can satisfy any requirement with rank ≤ 2.
+</Note>
+
+## Account Entitlement and Key Scoping
+
+Your account's **entitlement** is the platform-level maximum access level assigned to your workspace. It is set by your subscription plan and can only be changed by your account manager or through an upgrade.
+
+When you create an API key in your dashboard, you choose a **scope** for that key. The scope can be any level from `none` up to your account's entitlement — you cannot set a key scope above your entitlement. The platform enforces this with a clamp: if you somehow request a scope above your entitlement, the key is issued at the entitlement level instead.
+
+```
+Effective access = min(key_scope_rank, account_entitlement_rank)
+```
+
+This design lets you follow the principle of least privilege without giving up your full entitlement. For example:
+
+<Tabs>
+  <Tab title="Development Key">
+    Your account holds `production` entitlement. You create a key scoped to `sandbox` for your staging environment. That key can fetch full-shape dataset records but cannot retrieve records marked as quote-safe for live use — preventing accidental production data from leaking into a staging build.
+  </Tab>
+  <Tab title="Partner Key">
+    You want to give a third-party integration partner read access to sample data for their own testing. Create a key scoped to `sample`. Even if the partner's systems are compromised, the key cannot access sandbox or production data.
+  </Tab>
+  <Tab title="CI Key">
+    Your CI pipeline needs to validate API response shapes. Create a key scoped to `sample`. Tests pass against the stable sample fixture set without consuming production quota or exposing live data.
+  </Tab>
+</Tabs>
+
+<Tip>
+  You can manage all your API keys, inspect their current scope, and review last-used timestamps from the [API Keys dashboard](/dashboard/api-keys). Rotate or revoke keys at any time without affecting other keys on your workspace.
+</Tip>
+
+## Minimum Access Requirements by Endpoint Category
+
+Different endpoint categories require a minimum access level. Requests below the minimum are rejected with an authorization error — they do not fall back silently.
+
+| Endpoint Category | Minimum Level | Notes |
+|---|---|---|
+| Health and status endpoints | `none` | Always reachable regardless of key scope |
+| Schema and metadata endpoints | `sample` | Dataset structure, field lists, version info |
+| Sample data endpoints | `sample` | Static sample records for schema validation |
+| Sync snapshot (sandbox data) | `sandbox` | Full record shape, non-production values |
+| Sync changes / delta | `sandbox` | Incremental changes since a cursor |
+| Finance fee records | `sandbox` | Dealer fees; `production` required for quote-safe rows in live use |
+| Equipment pricing | `sandbox` | Price observations; `production` required for quote-safe rows in live use |
+| Context datasets | `sandbox` | Utility territory, rates, incentives, climate, labor, AHRI |
+| Quote-safe data in live applications | `production` | Any request where quote-safe records will be shown to a customer |
+
+<Warning>
+  `sandbox` access allows you to retrieve records including those with `quote_safe: true` in their payload, but using sandbox-tier data in a live customer quote is a violation of the platform terms of service. **Production access is required whenever `quote_safe: true` records appear in a customer-facing context.** The distinction is enforced contractually, not just technically.
+</Warning>
+
+## Upgrading Your Entitlement
+
+If your current entitlement does not meet the requirements of a workflow you are building, you have two options:
+
+<Steps>
+  <Step title="Check your current entitlement">
+    Open the [API Keys dashboard](/dashboard/api-keys) and view your workspace entitlement badge in the top section of the page.
+  </Step>
+  <Step title="Review what each upgrade unlocks">
+    The Data Catalog shows per-packet access state. Packets that require a higher entitlement display an upgrade prompt with the required level.
+  </Step>
+  <Step title="Request an upgrade">
+    Contact your account manager or use the upgrade flow in the dashboard. Entitlement changes take effect immediately for new keys; existing keys retain their previously assigned scope.
+  </Step>
+</Steps>
+
+## How Access Is Evaluated at Request Time
+
+When your application makes an API request, the platform evaluates access in this order:
+
+1. **Authenticate the key** — verify the API key signature and look up the key's assigned scope
+2. **Load account entitlement** — retrieve the workspace entitlement for the key's owner
+3. **Clamp to entitlement** — apply `min(key_scope_rank, entitlement_rank)` to get the effective level
+4. **Check endpoint minimum** — compare the effective level against the endpoint's required minimum
+5. **Authorize or reject** — if the effective level meets or exceeds the minimum, the request proceeds; otherwise a 403 is returned
+
+This evaluation happens on every request. Changing your key scope or account entitlement takes effect on the next request with no cache delay.

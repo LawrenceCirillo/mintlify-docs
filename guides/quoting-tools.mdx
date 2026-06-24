@@ -1,0 +1,197 @@
+---
+title: "Integrate Home Service Data into Your Quoting Tool"
+sidebarTitle: "Quoting Tools"
+description: "Pull current lender rates, equipment specs, and local context into your quoting flow with a single bundled API call per quote session."
+---
+
+Quoting tools break when the data underneath them goes stale. Lender programs change without notice, equipment pricing drifts, and local incentive eligibility varies by county. Home Service Data solves this by giving your quoting tool a single endpoint — `/api/v1/quote-context` — that returns finance programs, equipment records, and local context in one authenticated request, so every quote is built on current, source-verified data.
+
+## The problem with piecemeal data
+
+Most quoting tools are assembled from static spreadsheets, CRM fields copied from emails, and occasional manual updates. The result is a quoting flow that may look polished but is silently working from outdated lender fees, wrong equipment assumptions, or missed incentive programs. Home Service Data replaces that patchwork with a curated, continuously verified data layer your tool can call at quote time.
+
+## Recommended approach
+
+For active quoting flows, use the `/api/v1/quote-context` endpoint as a single bundled call per quote session. You pass the trade vertical, state, county, and the specific measure you are quoting (for example, `air_source_heat_pump`), and the API returns matching finance programs, equipment catalog records, and the local context needed to build an accurate quote — all in one response.
+
+Valid values for the `trade` parameter are `solar`, `hvac`, `roofing`, `plumbing`, and `electrical`.
+
+## Making the request
+
+<CodeGroup>
+
+```bash cURL
+curl -G https://homeservicedata.com/api/v1/quote-context \
+  -H "x-api-key: YOUR_API_KEY" \
+  --data-urlencode "trade=hvac" \
+  --data-urlencode "state=GA" \
+  --data-urlencode "county=Fulton" \
+  --data-urlencode "measure=air_source_heat_pump"
+```
+
+```typescript TypeScript
+const params = new URLSearchParams({
+  trade: "hvac",
+  state: "GA",
+  county: "Fulton",
+  measure: "air_source_heat_pump",
+});
+
+const response = await fetch(
+  `https://homeservicedata.com/api/v1/quote-context?${params}`,
+  {
+    headers: {
+      "x-api-key": "YOUR_API_KEY",
+    },
+  }
+);
+
+const { data, error } = await response.json();
+
+if (error) {
+  throw new Error(error);
+}
+
+// data.finance[] — matching finance programs
+// data.equipment[] — matching equipment records
+// data.context{} — local climate, incentives, permits, and eligibility
+```
+
+</CodeGroup>
+
+## Response shape
+
+The response envelope wraps a structured payload with four top-level keys.
+
+```json
+{
+  "data": {
+    "trade": "hvac",
+    "inputs": {
+      "state": "GA",
+      "county": "Fulton",
+      "county_fips": null,
+      "city": null,
+      "utility": null,
+      "measure": "air_source_heat_pump",
+      "address_redacted": false,
+      "financier": null,
+      "payment_type": null,
+      "term_months": null,
+      "equipment_category": null,
+      "manufacturer": null,
+      "sku": null,
+      "equipment_id": null
+    },
+    "coverage": {
+      "finance_records": 18,
+      "equipment_records": 24,
+      "equipment_total_available": 312,
+      "context_records": {
+        "climate": 1,
+        "incentives": 4,
+        "labor_adders": 3,
+        "permits": 2,
+        "finance_eligibility": 7,
+        "utility_territory": 0
+      },
+      "quote_safe_summary": {
+        "finance": { "total": 18, "quote_safe": 15, "not_quote_safe": 3 },
+        "equipment": { "total": 24, "quote_safe": 20, "not_quote_safe": 4 },
+        "climate": { "total": 1, "quote_safe": 1, "not_quote_safe": 0 },
+        "incentives": { "total": 4, "quote_safe": 3, "not_quote_safe": 1 },
+        "labor_adders": { "total": 3, "quote_safe": 3, "not_quote_safe": 0 },
+        "permits": { "total": 2, "quote_safe": 2, "not_quote_safe": 0 },
+        "finance_eligibility": { "total": 7, "quote_safe": 6, "not_quote_safe": 1 },
+        "utility_territory": { "total": 0, "quote_safe": 0, "not_quote_safe": 0 }
+      },
+      "unresolved_requirements": [],
+      "warnings": []
+    },
+    "finance": [ /* finance program records */ ],
+    "equipment": [ /* equipment catalog records */ ],
+    "context": {
+      "equipment_incentive_context": null,
+      "climate": [ /* climate context for state/county */ ],
+      "incentives": [ /* matching incentive programs */ ],
+      "labor_adders": [ /* applicable labor add-ons */ ],
+      "permits": [ /* permit context for jurisdiction */ ],
+      "finance_eligibility": [ /* lender eligibility records */ ],
+      "utility_territory_resolution": null
+    }
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+## Checking `quote_safe` before displaying data
+
+Every record in `finance[]` and `equipment[]` carries a `quote_safe` boolean. You must check this flag before presenting any record to a customer or using it in a binding quote calculation.
+
+```typescript
+// Filter to only quote-safe finance programs
+const safePrograms = data.finance.filter(
+  (program) => program.quote_safe === true
+);
+
+// Filter to only quote-safe equipment records
+const safeEquipment = data.equipment.filter(
+  (item) => item.quote_safe === true
+);
+
+if (safePrograms.length === 0) {
+  // Warn the user — no verified programs available for this query
+}
+```
+
+Records where `quote_safe` is `false` or `null` have not passed the full verification cycle. They may still be useful for internal reference, but you should never present them to customers as confirmed program terms.
+
+<Note>
+Records inside `context{}` — such as `incentives`, `climate`, and `permits` — are enrichment data. They provide helpful context for building a complete quote but carry their own `quote_safe` state. Always check that field on individual context records before using them as binding quote line items.
+</Note>
+
+## Narrowing results with additional parameters
+
+The endpoint accepts several optional query parameters to narrow the response to exactly what your quoting flow needs.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `trade` | string | `solar`, `hvac`, `roofing`, `plumbing`, or `electrical` (default: `solar`) |
+| `state` | string | Two-letter state code, e.g. `GA` |
+| `county` | string | County name, e.g. `Fulton` |
+| `county_fips` | string | Five-digit county FIPS code, alternative to `county` |
+| `city` | string | City name for permit context scoping |
+| `utility` | string | Utility provider name for incentive scoping |
+| `measure` | string | Measure key, e.g. `air_source_heat_pump` |
+| `equipment_id` | string | Equipment record ID; infers `measure` automatically |
+| `financier` | string | Filter finance records to a specific lender slug |
+| `payment_type` | string | Filter by payment type |
+| `term_months` | integer | Filter finance records by term length |
+| `equipment_category` | string | `module`, `inverter`, `roofing`, `hvac`, or `product` |
+| `manufacturer` | string | Filter equipment by manufacturer |
+| `sku` | string | Filter equipment by SKU or model number |
+| `address` | string | Postal address for utility territory resolution |
+| `finance_limit` | integer | Max finance records returned (default 25, max 100) |
+| `equipment_limit` | integer | Max equipment records returned (default 25, max 100) |
+| `context_limit` | integer | Max records returned per context category (default 10, max 50) |
+
+## Handling warnings and unresolved requirements
+
+The `coverage` object in the response includes two diagnostic arrays you should surface in your integration logs.
+
+- `warnings` — advisory messages such as "No quote-safe finance rows matched" or "Add state/county to return climate context." These tell you when a query returned partial data.
+- `unresolved_requirements` — requirements that could not be resolved for specific context records, prefixed by their category (e.g., `"finance_eligibility: county scope not resolved"`).
+
+Neither field causes an error response, but both signal that your quote may be missing data it needs.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quote Context API Reference" icon="code" href="/api-reference/quote-context">
+    Full parameter list, response schema, and error codes for the quote-context endpoint.
+  </Card>
+  <Card title="Sync Integration" icon="refresh-cw" href="/guides/sync-integration">
+    Seed a local database with a snapshot and stay current with delta polling for zero-latency quote paths.
+  </Card>
+</CardGroup>

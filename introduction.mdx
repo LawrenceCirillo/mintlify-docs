@@ -1,0 +1,65 @@
+---
+title: "Home Service Data: Verified Data for Home Service Quoting"
+sidebarTitle: "Introduction"
+description: "Home Service Data delivers source-verified datasets for solar, HVAC, roofing, finance, and utility—ready to use in quoting tools and CRMs via REST API."
+---
+
+Home Service Data gives quoting tools, CRMs, and workflow systems a single API for the data they need to produce accurate quotes: lender rates, equipment specs, incentives, utility context, labor, and permit context—all source-tracked and marked quote-safe or context-only.
+
+## What you can do with Home Service Data
+
+<CardGroup cols={2}>
+  <Card title="Pull finance programs" icon="landmark">
+    Retrieve current dealer-fee and lender program rows for solar, HVAC, and roofing projects.
+  </Card>
+  <Card title="Look up equipment specs" icon="microchip">
+    Browse solar modules, inverters, and HVAC equipment with pricing context and efficiency ratings.
+  </Card>
+  <Card title="Fetch utility context" icon="bolt">
+    Resolve a customer address to its utility territory and get regional electricity-rate context.
+  </Card>
+  <Card title="Get incentive data" icon="tag">
+    Pull federal, state, and utility incentive records filtered by trade, state, and measure.
+  </Card>
+  <Card title="Sync datasets" icon="arrows-rotate">
+    Keep your own database current with snapshot and delta sync endpoints.
+  </Card>
+  <Card title="Get quote context in one call" icon="file-invoice-dollar">
+    Use the composite `/quote-context` endpoint to bundle finance, equipment, incentives, and local context in a single request.
+  </Card>
+</CardGroup>
+
+## How it works
+
+Home Service Data continuously monitors source documents—lender rate sheets, equipment catalogs, incentive program pages, BLS labor data, EIA electricity tables, and utility territory files. When sources change, reviewers update and publish new dataset versions. Every record carries a source link, a review status, a confidence score, and a `quote_safe` flag.
+
+Your API key scopes which datasets you can access and at what level (sample, sandbox, or production). All data is delivered as JSON over HTTPS.
+
+## Quote-safe vs. context-only
+
+Every record returned by the API includes a `quote_safe` boolean. Records where `quote_safe: true` have passed source review and are approved for use in customer-facing quotes. Records where `quote_safe: false` are useful as background context but should not be presented to customers as final pricing.
+
+<Note>
+  Check `quote_safe` on every record before using it in a live quote. See [Quote-Safe Data](/concepts/quote-safe) for the full policy.
+</Note>
+
+## Supported trades
+
+Home Service Data covers: **solar**, **HVAC**, **roofing**, **plumbing**, and **electrical**. Most dataset endpoints accept a `trade` parameter to filter results to a specific vertical.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Make your first API call in five minutes.
+  </Card>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Learn how to authenticate with your API key.
+  </Card>
+  <Card title="Core Concepts" icon="book" href="/concepts/data-packets">
+    Understand packets, quote-safe, and access levels.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/overview">
+    Browse every endpoint with request/response examples.
+  </Card>
+</CardGroup>

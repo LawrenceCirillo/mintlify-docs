@@ -1,0 +1,171 @@
+---
+title: "Home Service Data REST API Overview"
+sidebarTitle: "Overview"
+description: "A complete reference for the Home Service Data REST API — base URL, authentication, response envelope, versioning, trades, and endpoint groups."
+---
+
+The Home Service Data REST API gives quoting tools, CRMs, and sales platforms programmatic access to structured, source-verified data across five home-service trades. Every response is wrapped in a consistent envelope, every data row carries readiness signals, and the API is versioned so your integration stays stable as the dataset grows.
+
+## Base URL
+
+All API endpoints are served from a single base URL. The current stable version is `v1`.
+
+```
+https://homeservicedata.com/api/v1
+```
+
+<Note>
+  Always use HTTPS. HTTP requests are not supported. Append endpoint paths directly to the base URL — for example, `https://homeservicedata.com/api/v1/search`.
+</Note>
+
+## Authentication
+
+Every request must include your API key in the `x-api-key` request header. There are no bearer tokens or cookies — the header is the sole authentication mechanism.
+
+```http
+GET /api/v1/search?q=Goodman HTTP/1.1
+Host: homeservicedata.com
+x-api-key: YOUR_API_KEY
+```
+
+API keys are organization-scoped. A key issued to your organization inherits the dataset entitlements that have been provisioned for that organization. Some keys carry additional per-key scope restrictions that cap access to a subset of those entitlements.
+
+<Tip>
+  Keep your API key out of client-side code and version control. Rotate it immediately if it is exposed. See the [Authentication](/authentication) guide for key management details.
+</Tip>
+
+## Response Envelope
+
+Every API response — whether successful or not — is wrapped in a standard three-field envelope.
+
+```json
+{
+  "data": [ ... ],
+  "error": null,
+  "meta": {
+    "page": 1,
+    "per_page": 25,
+    "total": 142,
+    "total_pages": 6
+  }
+}
+```
+
+<ResponseField name="data" type="array | object | null">
+  The payload returned by the endpoint. `null` on error responses.
+</ResponseField>
+
+<ResponseField name="error" type="string | null">
+  A human-readable error message. `null` on success responses. See [Errors](/api-reference/errors) for the full list of error codes and messages.
+</ResponseField>
+
+<ResponseField name="meta" type="object | null">
+  Pagination context on list endpoints, `null` on error responses and on endpoints that do not paginate.
+
+  <Expandable title="meta fields">
+    <ResponseField name="meta.page" type="number">
+      The current page number (1-indexed).
+    </ResponseField>
+    <ResponseField name="meta.per_page" type="number">
+      The number of records returned per page.
+    </ResponseField>
+    <ResponseField name="meta.total" type="number">
+      Total records matching the request filters.
+    </ResponseField>
+    <ResponseField name="meta.total_pages" type="number">
+      Total pages at the current `per_page` size.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+An error response looks like this:
+
+```json
+{
+  "data": null,
+  "error": "Missing x-api-key header.",
+  "meta": null
+}
+```
+
+## Pagination
+
+List endpoints accept `page` and `per_page` query parameters. The default is `page=1` and `per_page=25`. The maximum `per_page` is `100`.
+
+```http
+GET /api/v1/catalog/equipment?trade=hvac&page=2&per_page=50
+```
+
+Iterate through pages by incrementing `page` until `page` exceeds `meta.total_pages`.
+
+## Data Quality Signals
+
+Every data row that can be used in a quote carries at least two readiness signals. These are not decorative — they drive which records are safe to surface to customers.
+
+<CardGroup cols={2}>
+  <Card title="quote_safe" icon="shield-check">
+    `true` when the record has passed all validation checks and is approved for use in customer-facing quotes. Always filter on `quote_safe=true` in production quote flows.
+  </Card>
+  <Card title="confidence" icon="chart-bar">
+    A three-tier signal — `high`, `medium`, or `low` — indicating how closely the data matches a primary source. Higher confidence means fewer assumptions.
+  </Card>
+  <Card title="last_verified_at" icon="clock">
+    ISO 8601 timestamp of the most recent source verification. Stale records may still be `quote_safe` but their `confidence` will reflect the age.
+  </Card>
+  <Card title="source_url" icon="link">
+    The canonical URL of the original source document or data sheet, where available. Useful for audit trails and compliance review.
+  </Card>
+</CardGroup>
+
+## Supported Trades
+
+The API is organized around trade verticals. Pass the `trade` parameter to scope results to a single vertical.
+
+| Trade | `trade` value |
+|---|---|
+| Solar | `solar` |
+| HVAC | `hvac` |
+| Roofing | `roofing` |
+| Plumbing | `plumbing` |
+| Electrical | `electrical` |
+
+Some endpoints (utility territory, climate, permits) serve cross-trade context data. Those records carry `trade: "context"` in their responses.
+
+## Versioning
+
+The API uses URL-path versioning. The current version is **v1**. Breaking changes will be released under a new version prefix (`/api/v2/…`) with a documented migration period. Non-breaking additions — new fields, new optional parameters, new endpoint groups — may be added to v1 without a version bump.
+
+## Endpoint Groups
+
+<CardGroup cols={2}>
+  <Card title="Finance" icon="credit-card" href="/api-reference/finance-fees">
+    Dealer fee programs, interest rates, term structures, and lender integrations. Requires `finance_fees` production access.
+  </Card>
+  <Card title="Equipment / Hardware" icon="cpu" href="/api-reference/catalog-equipment">
+    The full equipment catalog: solar modules, inverters, HVAC systems, roofing products, and generic hardware. Paginated browsing with category, manufacturer, and SKU filters.
+  </Card>
+  <Card title="Context" icon="map-pin">
+    Location-aware context data — utility territories, electricity rates, incentive programs, permit assumptions, climate zones, and labor adders. Feed address-level data into quotes.
+  </Card>
+  <Card title="Sync" icon="refresh-cw">
+    Dataset snapshots for bulk integration. Pull versioned exports of any entitled dataset into your own data store for offline use.
+  </Card>
+  <Card title="Search" icon="search" href="/api-reference/search">
+    Unified full-text search across all dataset types — equipment, finance programs, incentives, utilities, permits, labor, and source documents — in a single request.
+  </Card>
+  <Card title="Benchmarks" icon="bar-chart-2">
+    Statistical aggregates (average, median, P25/P75, std dev) for pricing and performance metrics, filterable by trade, region, and time window.
+  </Card>
+  <Card title="Quote Context" icon="file-text">
+    A single composite endpoint that assembles all quote-ready context for a given address and trade: equipment options, finance programs, incentives, utility rates, and permit requirements — deduplicated and `quote_safe` filtered.
+  </Card>
+</CardGroup>
+
+## Response Timing Headers
+
+Every response includes an `X-HSD-Duration-Ms` header reporting the server-side processing time in milliseconds, and a `Server-Timing` header with per-phase breakdowns (auth, database, access checks, search). These are useful for diagnosing latency in production integrations.
+
+## Further Reading
+
+- [Authentication](/authentication) — API key management, scopes, and rotation
+- [Error Codes](/api-reference/errors) — HTTP status codes, error messages, and retry strategy
