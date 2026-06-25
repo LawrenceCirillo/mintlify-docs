@@ -7,7 +7,10 @@
     "light": "#00c4ff",
     "dark": "#0000ff"
   },
-  "favicon": "https://media.brand.dev/86c409b8-dae0-4705-8415-791519d2baa7.svg",
+  "favicon": {
+    "light": "/images/apple-touch-icon.png",
+    "dark": "/images/apple-touch-icon.png"
+  },
   "logo": {
     "light": "/images/HSDLogoblack.svg",
     "dark": "/images/HSDLogo.svg"
@@ -142,5 +145,8 @@
     "body": {
       "family": "Inter"
     }
+  },
+  "icons": {
+    "library": "fontawesome"
   }
 }
