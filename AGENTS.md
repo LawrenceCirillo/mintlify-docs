@@ -2,7 +2,7 @@
 
 ## About this project
 
-- Documentation for [Home Service Data](https://homeservicedata.com), deployed at `https://homeservicedata.mintlify.app`
+- Documentation for [Home Service Data](https://homeservicedata.org), deployed at `https://homeservicedata.mintlify.app`
 - Source repo: `https://github.com/LawrenceCirillo/mintlify-docs`
 - App codebase lives in the sibling `homeservicedataapp` workspace (`app/`)
 - Pages are MDX with YAML frontmatter; site config is `docs.json`
@@ -40,4 +40,4 @@ When app behavior changes, update the matching docs page and keep API examples a
 - Document the public REST API, dashboard workflows, and integration guides
 - Do not document internal admin ingestion pipelines or unreleased endpoints
 - Do not expose secrets, API keys, or internal Supabase details
-- Link to `https://homeservicedata.com/dashboard` and `https://homeservicedata.com/contact` for product actions
+- Link to `https://homeservicedata.org/dashboard` and `https://homeservicedata.org/contact` for product actions

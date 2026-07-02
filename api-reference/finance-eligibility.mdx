@@ -13,7 +13,7 @@ The `/api/v1/context/finance-eligibility` endpoint returns eligible-product reco
 ## Endpoint
 
 ```
-GET https://homeservicedata.com/api/v1/context/finance-eligibility
+GET https://homeservicedata.org/api/v1/context/finance-eligibility
 ```
 
 ## Request
@@ -21,7 +21,7 @@ GET https://homeservicedata.com/api/v1/context/finance-eligibility
 ### Headers
 
 <ParamField header="x-api-key" type="string" required>
-  Your API key. Obtain or rotate keys in your [dashboard](https://homeservicedata.com/dashboard).
+  Your API key. Obtain or rotate keys in your [dashboard](https://homeservicedata.org/dashboard).
 </ParamField>
 
 ### Query Parameters
@@ -212,7 +212,7 @@ A successful response returns `data.records` (the eligibility rows), `data.cover
 <CodeGroup>
 
 ```bash cURL
-curl -G https://homeservicedata.com/api/v1/context/finance-eligibility \
+curl -G https://homeservicedata.org/api/v1/context/finance-eligibility \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "trade=hvac" \
   --data-urlencode "state=GA"
@@ -222,7 +222,7 @@ curl -G https://homeservicedata.com/api/v1/context/finance-eligibility \
 import requests
 
 resp = requests.get(
-    "https://homeservicedata.com/api/v1/context/finance-eligibility",
+    "https://homeservicedata.org/api/v1/context/finance-eligibility",
     headers={"x-api-key": "YOUR_API_KEY"},
     params={"trade": "hvac", "state": "GA"},
 )
@@ -231,7 +231,7 @@ records = resp.json()["data"]["records"]
 
 ```javascript JavaScript
 const res = await fetch(
-  "https://homeservicedata.com/api/v1/context/finance-eligibility?trade=hvac&state=GA",
+  "https://homeservicedata.org/api/v1/context/finance-eligibility?trade=hvac&state=GA",
   { headers: { "x-api-key": "YOUR_API_KEY" } }
 );
 const { records } = (await res.json()).data;

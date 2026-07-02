@@ -9,7 +9,7 @@ The AHRI matches endpoint returns matched-system efficiency records for HVAC spl
 **Endpoint**
 
 ```
-GET https://homeservicedata.com/api/v1/context/ahri-matches
+GET https://homeservicedata.org/api/v1/context/ahri-matches
 ```
 
 <Warning>
@@ -145,14 +145,14 @@ GET https://homeservicedata.com/api/v1/context/ahri-matches
 <CodeGroup>
 
 ```bash By Equipment ID
-curl -G https://homeservicedata.com/api/v1/context/ahri-matches \
+curl -G https://homeservicedata.org/api/v1/context/ahri-matches \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "equipment_id=eqp_01hzka1bc2de3fg4hi5jk6abcd" \
   --data-urlencode "quote_safe=true"
 ```
 
 ```bash By Model Numbers
-curl -G https://homeservicedata.com/api/v1/context/ahri-matches \
+curl -G https://homeservicedata.org/api/v1/context/ahri-matches \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "outdoor_model=24ACC636A003" \
   --data-urlencode "manufacturer=Carrier" \
@@ -161,7 +161,7 @@ curl -G https://homeservicedata.com/api/v1/context/ahri-matches \
 ```
 
 ```bash By AHRI Reference Number
-curl -G https://homeservicedata.com/api/v1/context/ahri-matches \
+curl -G https://homeservicedata.org/api/v1/context/ahri-matches \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "ahri_reference_number=210191234"
 ```

@@ -1,10 +1,10 @@
 ---
-title: "Push Home Service Data into CRM and Field Service Tools"
+title: "Map Home Service Data into CRM and Field Service Tools"
 sidebarTitle: "CRM Integration"
-description: "Sync source-verified finance eligibility, incentives, and equipment data into CRM platforms like ServiceTitan and Jobber to keep lead records accurate."
+description: "Use the API, sync endpoints, and webhooks to map quote-safe records and context fields into CRM and field-service workflows."
 ---
 
-CRM platforms are only as useful as the data inside them. When a sales rep opens a lead in ServiceTitan, Jobber, Housecall Pro, or any field-service tool, they need current lender eligibility, available incentive programs, and verified equipment context — not a static note from last quarter. Home Service Data gives you two proven patterns for keeping your CRM records accurate without rebuilding your workflows from scratch.
+CRM platforms are only as useful as the data inside them. When a sales rep opens a lead in ServiceTitan, Jobber, Housecall Pro, or any field-service tool, they need lender eligibility, available incentive programs, equipment context, and quote-safe status - not a static note from last quarter. Home Service Data gives you two integration patterns for keeping CRM records aligned without rebuilding your workflows from scratch.
 
 ## Supported platforms
 
@@ -33,7 +33,7 @@ Any platform that accepts webhooks, has an API, or allows custom field populatio
 
     const hsd = createHsdClient({
       apiKey: process.env.HSD_API_KEY!,
-      baseUrl: "https://homeservicedata.com",
+      baseUrl: "https://homeservicedata.org",
     });
 
     // Called from your CRM webhook handler when a lead is created
@@ -49,7 +49,7 @@ Any platform that accepts webhooks, has an API, or allows custom field populatio
       });
 
       const response = await fetch(
-        `https://homeservicedata.com/api/v1/quote-context?${params}`,
+        `https://homeservicedata.org/api/v1/quote-context?${params}`,
         {
           headers: { "x-api-key": process.env.HSD_API_KEY! },
         }
@@ -88,7 +88,7 @@ Any platform that accepts webhooks, has an API, or allows custom field populatio
 
     const hsd = createHsdClient({
       apiKey: process.env.HSD_API_KEY!,
-      baseUrl: "https://homeservicedata.com",
+      baseUrl: "https://homeservicedata.org",
     });
 
     // Step 1 — Seed your database from a full snapshot
@@ -138,7 +138,7 @@ Any platform that accepts webhooks, has an API, or allows custom field populatio
 
 ## Keeping CRM data fresh with webhooks
 
-Even with a scheduled sync, dataset updates can happen between polling intervals. Home Service Data publishes `dataset.version.published` webhook events whenever a dataset is updated. Configure a webhook endpoint in the Dashboard to receive these events and trigger an immediate delta pull — so your CRM records are updated within seconds of a new lender program or incentive change going live.
+Even with a scheduled sync, dataset updates can happen between polling intervals. Home Service Data publishes `dataset.version.published` webhook events whenever a dataset is updated. Configure a webhook endpoint in the Dashboard to receive these events and trigger a delta pull as soon as delivery succeeds.
 
 See the [Webhooks guide](/guides/webhooks) for the full payload shape and a handler example.
 
@@ -157,7 +157,7 @@ Different CRM platforms expose different extension points. Here are the most com
     Append `context.permits` and `context.climate` summaries to job notes so technicians arrive informed.
   </Card>
   <Card title="Product catalog" icon="database">
-    Sync `equipment_pricing` records into your CRM's product catalog so reps can select verified SKUs when building proposals.
+    Sync `equipment_pricing` records into your CRM's product catalog so reps can see source and quote-safe status when selecting SKUs for proposals.
   </Card>
 </CardGroup>
 

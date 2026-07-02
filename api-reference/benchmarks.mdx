@@ -9,7 +9,7 @@ The `/api/v1/benchmarks` endpoint exposes a statistical summary of key pricing a
 ## Endpoint
 
 ```
-GET https://homeservicedata.com/api/v1/benchmarks
+GET https://homeservicedata.org/api/v1/benchmarks
 ```
 
 ## Authentication
@@ -139,27 +139,27 @@ The following optional filters are accepted depending on which `metric` you requ
 
 <CodeGroup>
 ```bash dealer_fee — all payment types
-curl "https://homeservicedata.com/api/v1/benchmarks?metric=dealer_fee" \
+curl "https://homeservicedata.org/api/v1/benchmarks?metric=dealer_fee" \
   -H "x-api-key: YOUR_API_KEY"
 ```
 
 ```bash dealer_fee — loan only, 240-month term
-curl "https://homeservicedata.com/api/v1/benchmarks?metric=dealer_fee&payment_type=loan&term_months=240" \
+curl "https://homeservicedata.org/api/v1/benchmarks?metric=dealer_fee&payment_type=loan&term_months=240" \
   -H "x-api-key: YOUR_API_KEY"
 ```
 
 ```bash inverter_base_cost — Enphase only
-curl "https://homeservicedata.com/api/v1/benchmarks?metric=inverter_base_cost&manufacturer=Enphase" \
+curl "https://homeservicedata.org/api/v1/benchmarks?metric=inverter_base_cost&manufacturer=Enphase" \
   -H "x-api-key: YOUR_API_KEY"
 ```
 
 ```bash inverter_price_per_watt — all manufacturers
-curl "https://homeservicedata.com/api/v1/benchmarks?metric=inverter_price_per_watt" \
+curl "https://homeservicedata.org/api/v1/benchmarks?metric=inverter_price_per_watt" \
   -H "x-api-key: YOUR_API_KEY"
 ```
 
 ```bash interest_rate — lease products, 60-month term
-curl "https://homeservicedata.com/api/v1/benchmarks?metric=interest_rate&payment_type=lease&term_months=60" \
+curl "https://homeservicedata.org/api/v1/benchmarks?metric=interest_rate&payment_type=lease&term_months=60" \
   -H "x-api-key: YOUR_API_KEY"
 ```
 </CodeGroup>

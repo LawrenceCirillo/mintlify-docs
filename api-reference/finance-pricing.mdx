@@ -13,7 +13,7 @@ The `/api/v1/pricing/finance` endpoint surfaces finance pricing context from the
 ## Endpoint
 
 ```
-GET https://homeservicedata.com/api/v1/pricing/finance
+GET https://homeservicedata.org/api/v1/pricing/finance
 ```
 
 ## Finance Pricing vs. Finance Fees
@@ -33,7 +33,7 @@ Both endpoints draw from the same `finance_fees` dataset and both require produc
 ### Headers
 
 <ParamField header="x-api-key" type="string" required>
-  Your API key. Obtain or rotate keys in your [dashboard](https://homeservicedata.com/dashboard).
+  Your API key. Obtain or rotate keys in your [dashboard](https://homeservicedata.org/dashboard).
 </ParamField>
 
 ### Query Parameters
@@ -168,7 +168,7 @@ A successful response returns `data.records` (the pricing rows), `data.coverage`
 <CodeGroup>
 
 ```bash cURL
-curl -G https://homeservicedata.com/api/v1/pricing/finance \
+curl -G https://homeservicedata.org/api/v1/pricing/finance \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "trade=solar" \
   --data-urlencode "payment_type=loan" \
@@ -179,7 +179,7 @@ curl -G https://homeservicedata.com/api/v1/pricing/finance \
 import requests
 
 resp = requests.get(
-    "https://homeservicedata.com/api/v1/pricing/finance",
+    "https://homeservicedata.org/api/v1/pricing/finance",
     headers={"x-api-key": "YOUR_API_KEY"},
     params={"trade": "solar", "payment_type": "loan", "limit": 25},
 )
@@ -190,7 +190,7 @@ coverage = payload["coverage"]
 
 ```javascript JavaScript
 const res = await fetch(
-  "https://homeservicedata.com/api/v1/pricing/finance?trade=solar&payment_type=loan&limit=25",
+  "https://homeservicedata.org/api/v1/pricing/finance?trade=solar&payment_type=loan&limit=25",
   { headers: { "x-api-key": "YOUR_API_KEY" } }
 );
 const { records, coverage } = (await res.json()).data;

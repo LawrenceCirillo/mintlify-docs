@@ -1,18 +1,18 @@
 ---
 title: "Integrate Home Service Data into Your Quoting Tool"
 sidebarTitle: "Quoting Tools"
-description: "Pull current lender rates, equipment specs, and local context into your quoting flow with a single bundled API call per quote session."
+description: "Pull published finance, equipment, incentive, labor, permit, utility, and trust context into quote workflows with one API call per quote session."
 ---
 
-Quoting tools break when the data underneath them goes stale. Lender programs change without notice, equipment pricing drifts, and local incentive eligibility varies by county. Home Service Data solves this by giving your quoting tool a single endpoint — `/api/v1/quote-context` — that returns finance programs, equipment records, and local context in one authenticated request, so every quote is built on current, source-verified data.
+Quoting tools break when the data underneath them goes stale. Lender programs change without notice, equipment pricing drifts, and local incentive eligibility varies by county. Home Service Data gives your quoting tool a single endpoint - `/api/v1/quote-context` - that returns finance programs, equipment records, local context, and trust signals in one authenticated request.
 
 ## The problem with piecemeal data
 
-Most quoting tools are assembled from static spreadsheets, CRM fields copied from emails, and occasional manual updates. The result is a quoting flow that may look polished but is silently working from outdated lender fees, wrong equipment assumptions, or missed incentive programs. Home Service Data replaces that patchwork with a curated, continuously verified data layer your tool can call at quote time.
+Most quoting tools are assembled from static spreadsheets, CRM fields copied from emails, and occasional manual updates. The result is a quoting flow that may look polished but is silently working from outdated lender fees, wrong equipment assumptions, or missed incentive programs. Home Service Data replaces that patchwork with a curated, source-reviewed data layer your tool can call at quote time.
 
 ## Recommended approach
 
-For active quoting flows, use the `/api/v1/quote-context` endpoint as a single bundled call per quote session. You pass the trade vertical, state, county, and the specific measure you are quoting (for example, `air_source_heat_pump`), and the API returns matching finance programs, equipment catalog records, and the local context needed to build an accurate quote — all in one response.
+For active quoting flows, use the `/api/v1/quote-context` endpoint as one bundled call per quote session. You pass the trade vertical, state, county, and the specific measure you are quoting (for example, `air_source_heat_pump`), and the API returns matching finance programs, equipment catalog records, local context, and coverage details in one response.
 
 Valid values for the `trade` parameter are `solar`, `hvac`, `roofing`, `plumbing`, and `electrical`.
 
@@ -21,7 +21,7 @@ Valid values for the `trade` parameter are `solar`, `hvac`, `roofing`, `plumbing
 <CodeGroup>
 
 ```bash cURL
-curl -G https://homeservicedata.com/api/v1/quote-context \
+curl -G https://homeservicedata.org/api/v1/quote-context \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "trade=hvac" \
   --data-urlencode "state=GA" \
@@ -38,7 +38,7 @@ const params = new URLSearchParams({
 });
 
 const response = await fetch(
-  `https://homeservicedata.com/api/v1/quote-context?${params}`,
+  `https://homeservicedata.org/api/v1/quote-context?${params}`,
   {
     headers: {
       "x-api-key": "YOUR_API_KEY",
@@ -121,7 +121,7 @@ The response envelope wraps a structured payload with four top-level keys.
     }
   },
   "error": null,
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 

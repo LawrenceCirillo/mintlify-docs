@@ -1,0 +1,65 @@
+---
+title: "Inspect Webhook Delivery and Replay"
+sidebarTitle: "Webhooks"
+description: "Use the dashboard webhooks page to review endpoint health, signed delivery history, response previews, retry state, and manual replay actions."
+---
+
+The Webhooks dashboard shows the operational state behind dataset update notifications. It is designed for support and recovery: you can confirm which endpoints are active, inspect recent signed delivery attempts, see failure reasons, and queue replay for failed or dead-lettered deliveries.
+
+## What You Can Inspect
+
+<CardGroup cols={2}>
+  <Card title="Endpoint Configuration" icon="webhook">
+    Review endpoint label, host, active/paused state, event filters, allowed host, signing algorithm, and max attempts.
+  </Card>
+  <Card title="Delivery History" icon="list-checks">
+    Inspect recent deliveries by event, endpoint, status, attempt count, last attempt time, and response status.
+  </Card>
+  <Card title="Signature Evidence" icon="shield-check">
+    Confirm whether a delivery was signed. The dashboard stores a signature hash for evidence, not the raw secret.
+  </Card>
+  <Card title="Replay Queue" icon="rotate-ccw">
+    Queue replay for failed or dead-lettered deliveries after you fix your endpoint.
+  </Card>
+</CardGroup>
+
+## Delivery Headers
+
+Webhook deliveries include these headers:
+
+| Header | Meaning |
+|---|---|
+| `X-HomeServiceData-Event` | Event type, such as `dataset.version.published` |
+| `X-HomeServiceData-Delivery` | Delivery identifier for idempotency and support |
+| `X-HomeServiceData-Signature` | HMAC-SHA256 signature in `sha256=<hex>` format |
+| `X-HomeServiceData-Timestamp` | Unix timestamp used in the signature base string |
+| `Idempotency-Key` | Stable event-endpoint key for duplicate protection |
+
+The signature base string is:
+
+```text
+<timestamp>.<raw request body>
+```
+
+## Replay Workflow
+
+<Steps>
+  <Step title="Open Webhooks">
+    Sign in and open [Dashboard → Webhooks](https://homeservicedata.org/dashboard/webhooks).
+  </Step>
+  <Step title="Find the failed delivery">
+    Filter visually by status. Failed and dead-lettered deliveries show response status, response preview, or error message when available.
+  </Step>
+  <Step title="Fix your endpoint">
+    Correct authentication, URL allowlist, timeout, or handler errors before replaying.
+  </Step>
+  <Step title="Queue replay">
+    Use **Queue replay** on the failed delivery. The delivery returns to the dispatch queue and is attempted again by the dispatcher.
+  </Step>
+</Steps>
+
+## Related Guides
+
+- [Webhook Integration Guide](/guides/webhooks)
+- [Sync Integration](/guides/sync-integration)
+- [Sync Health](/dashboard/sync-health)

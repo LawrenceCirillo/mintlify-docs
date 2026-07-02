@@ -9,7 +9,7 @@ The roofing context endpoint returns manufacturer-backed shingle and roofing mat
 **Endpoint**
 
 ```
-GET https://homeservicedata.com/api/v1/context/roofing
+GET https://homeservicedata.org/api/v1/context/roofing
 ```
 
 ## Query Parameters
@@ -110,7 +110,7 @@ GET https://homeservicedata.com/api/v1/context/roofing
 <CodeGroup>
 
 ```bash Materials Only
-curl -G https://homeservicedata.com/api/v1/context/roofing \
+curl -G https://homeservicedata.org/api/v1/context/roofing \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "manufacturer=GAF" \
   --data-urlencode "impact_rating_class=4" \
@@ -119,7 +119,7 @@ curl -G https://homeservicedata.com/api/v1/context/roofing \
 ```
 
 ```bash Materials with Labor
-curl -G https://homeservicedata.com/api/v1/context/roofing \
+curl -G https://homeservicedata.org/api/v1/context/roofing \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "manufacturer=GAF" \
   --data-urlencode "include_labor=true" \

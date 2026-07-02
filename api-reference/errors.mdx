@@ -14,7 +14,24 @@ Every error response has this shape:
 {
   "data": null,
   "error": "Missing x-api-key header.",
-  "meta": null
+  "meta": {
+    "request_id": "req_01J...",
+    "api_version": "2026-06-30",
+    "dataset_version": null,
+    "trust": {
+      "endpoint": "/api/v1/search",
+      "level": "mixed",
+      "use_case": "Search across entitled datasets.",
+      "data_rights_note": "Use result-level quote-safe labels before quoting.",
+      "required_response_fields": ["quote_safe"]
+    },
+    "performance": {
+      "target_ms": 300,
+      "warn_ms": 600,
+      "max_response_bytes": 65536,
+      "basis": "server"
+    }
+  }
 }
 ```
 
@@ -26,8 +43,8 @@ Every error response has this shape:
   A plain-English description of what went wrong. The message is stable and safe to log, display in developer tooling, or use in conditional logic.
 </ResponseField>
 
-<ResponseField name="meta" type="null">
-  Always `null` on error responses.
+<ResponseField name="meta" type="object | null">
+  Request metadata useful for support and debugging. Auth, entitlement, and route errors normally include `request_id`, `api_version`, trust metadata, and performance budget metadata. Some low-level framework errors may not include this envelope.
 </ResponseField>
 
 ## HTTP Status Codes
@@ -41,7 +58,7 @@ The request was well-formed HTTP but contained invalid or missing parameters. Th
 {
   "data": null,
   "error": "Query parameter 'q' is required (min 2 characters).",
-  "meta": null
+      "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 
@@ -49,7 +66,7 @@ The request was well-formed HTTP but contained invalid or missing parameters. Th
 {
   "data": null,
   "error": "Unsupported trade \"painting\". Use solar, hvac, roofing, plumbing, electrical, or context.",
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 
@@ -57,7 +74,7 @@ The request was well-formed HTTP but contained invalid or missing parameters. Th
 {
   "data": null,
   "error": "Invalid state. Use a two-letter state code.",
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 
@@ -65,7 +82,7 @@ The request was well-formed HTTP but contained invalid or missing parameters. Th
 {
   "data": null,
   "error": "Invalid quote_safe. Use true or false.",
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 
@@ -73,7 +90,7 @@ The request was well-formed HTTP but contained invalid or missing parameters. Th
 {
   "data": null,
   "error": "Missing required parameter: metric.",
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 </CodeGroup>
@@ -95,7 +112,7 @@ The request was rejected because no valid API key was found. Check that:
 {
   "data": null,
   "error": "Missing x-api-key header.",
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 
@@ -103,7 +120,7 @@ The request was rejected because no valid API key was found. Check that:
 {
   "data": null,
   "error": "Invalid API key.",
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 </CodeGroup>
@@ -119,7 +136,7 @@ Your API key is valid but does not have the access level required for the reques
 {
   "data": null,
   "error": "Dataset access required: finance_fees requires production access.",
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 
@@ -127,7 +144,7 @@ Your API key is valid but does not have the access level required for the reques
 {
   "data": null,
   "error": "API key is deactivated.",
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 
@@ -135,7 +152,7 @@ Your API key is valid but does not have the access level required for the reques
 {
   "data": null,
   "error": "Dataset access requires an organization-scoped API key.",
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 </CodeGroup>
@@ -167,7 +184,7 @@ Your API key has exceeded either its per-minute request rate or its monthly quot
 {
   "data": null,
   "error": "Rate limit exceeded. Maximum 60 requests per minute.",
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 
@@ -175,7 +192,7 @@ Your API key has exceeded either its per-minute request rate or its monthly quot
 {
   "data": null,
   "error": "Monthly API quota exceeded.",
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 </CodeGroup>
@@ -200,7 +217,7 @@ An unexpected error occurred on the server. The platform team is automatically a
 {
   "data": null,
   "error": "Internal server error.",
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 
@@ -214,7 +231,7 @@ The rate-limiting subsystem is temporarily unavailable. The request was not coun
 {
   "data": null,
   "error": "API key rate limiting is temporarily unavailable.",
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 

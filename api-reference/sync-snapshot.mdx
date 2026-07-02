@@ -11,7 +11,7 @@ The endpoint supports **conditional GET** via the `ETag` / `If-None-Match` mecha
 ## Request
 
 ```
-GET https://homeservicedata.com/api/v1/sync/snapshot
+GET https://homeservicedata.org/api/v1/sync/snapshot
 ```
 
 ### Authentication
@@ -53,12 +53,12 @@ Every `200` response includes an `ETag` response header. Store that value and in
 
 ```bash
 # First request — no ETag yet
-curl https://homeservicedata.com/api/v1/sync/snapshot?dataset=finance_fees \
+curl https://homeservicedata.org/api/v1/sync/snapshot?dataset=finance_fees \
   -H "x-api-key: YOUR_API_KEY" \
   -i
 
 # Subsequent request — send stored ETag
-curl https://homeservicedata.com/api/v1/sync/snapshot?dataset=finance_fees \
+curl https://homeservicedata.org/api/v1/sync/snapshot?dataset=finance_fees \
   -H "x-api-key: YOUR_API_KEY" \
   -H 'If-None-Match: "v42:finance_fees:all:5000"' \
   -i
@@ -130,13 +130,13 @@ curl https://homeservicedata.com/api/v1/sync/snapshot?dataset=finance_fees \
 
 <CodeGroup>
 ```bash cURL — finance fees snapshot
-curl -G https://homeservicedata.com/api/v1/sync/snapshot \
+curl -G https://homeservicedata.org/api/v1/sync/snapshot \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "dataset=finance_fees"
 ```
 
 ```bash cURL — HVAC climate snapshot (trade-filtered)
-curl -G https://homeservicedata.com/api/v1/sync/snapshot \
+curl -G https://homeservicedata.org/api/v1/sync/snapshot \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "dataset=hvac_climate" \
   --data-urlencode "trade=hvac" \
@@ -144,7 +144,7 @@ curl -G https://homeservicedata.com/api/v1/sync/snapshot \
 ```
 
 ```bash cURL — conditional GET
-curl -G https://homeservicedata.com/api/v1/sync/snapshot \
+curl -G https://homeservicedata.org/api/v1/sync/snapshot \
   -H "x-api-key: YOUR_API_KEY" \
   -H 'If-None-Match: "v42:finance_fees:all:5000"' \
   --data-urlencode "dataset=finance_fees"
@@ -195,7 +195,7 @@ curl -G https://homeservicedata.com/api/v1/sync/snapshot \
     }
   },
   "error": null,
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 

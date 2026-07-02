@@ -13,7 +13,7 @@ The `/api/v1/context/finance-products` endpoint returns lender and finance-progr
 ## Endpoint
 
 ```
-GET https://homeservicedata.com/api/v1/context/finance-products
+GET https://homeservicedata.org/api/v1/context/finance-products
 ```
 
 ## Request
@@ -21,7 +21,7 @@ GET https://homeservicedata.com/api/v1/context/finance-products
 ### Headers
 
 <ParamField header="x-api-key" type="string" required>
-  Your API key. Obtain or rotate keys in your [dashboard](https://homeservicedata.com/dashboard).
+  Your API key. Obtain or rotate keys in your [dashboard](https://homeservicedata.org/dashboard).
 </ParamField>
 
 ### Query Parameters
@@ -226,7 +226,7 @@ A successful response returns an `application/json` object with `data.records` (
 <CodeGroup>
 
 ```bash cURL
-curl -G https://homeservicedata.com/api/v1/context/finance-products \
+curl -G https://homeservicedata.org/api/v1/context/finance-products \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "trade=solar" \
   --data-urlencode "product_type=loan" \
@@ -237,7 +237,7 @@ curl -G https://homeservicedata.com/api/v1/context/finance-products \
 import requests
 
 resp = requests.get(
-    "https://homeservicedata.com/api/v1/context/finance-products",
+    "https://homeservicedata.org/api/v1/context/finance-products",
     headers={"x-api-key": "YOUR_API_KEY"},
     params={"trade": "solar", "product_type": "loan", "state": "CA"},
 )
@@ -246,7 +246,7 @@ records = resp.json()["data"]["records"]
 
 ```javascript JavaScript
 const res = await fetch(
-  "https://homeservicedata.com/api/v1/context/finance-products?trade=solar&product_type=loan&state=CA",
+  "https://homeservicedata.org/api/v1/context/finance-products?trade=solar&product_type=loan&state=CA",
   { headers: { "x-api-key": "YOUR_API_KEY" } }
 );
 const { records } = (await res.json()).data;

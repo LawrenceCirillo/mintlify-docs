@@ -1,7 +1,7 @@
 ---
 title: "GET /api/v1/context/utility-territory — Lookup API"
 sidebarTitle: "Utility Territory"
-description: "Browse utility service territories by state, city, or coordinates, or resolve a postal address to its utility provider with quote-safe confidence."
+description: "Browse utility service territories by state, city, or coordinates, or resolve a postal address to candidate utility territories with confidence and quote-safe flags."
 ---
 
 The utility territory endpoints let you look up which electric utility serves a given location. The **browse** endpoint (`GET /api/v1/context/utility-territory`) returns territory records you can filter by state, city, utility name, or lat/lng coordinates. The **resolve** endpoint (`GET /api/v1/context/utility-territory/resolve`) accepts a full postal address, geocodes it, and returns the best-matched service territory records ordered by confidence. Quote-safe territory resolution requires polygon-level coverage to be loaded for the target area — records backed only by sample-point context return with `quote_safe: false`.
@@ -11,7 +11,7 @@ The utility territory endpoints let you look up which electric utility serves a 
 ## Browse Utility Territories
 
 ```
-GET https://homeservicedata.com/api/v1/context/utility-territory
+GET https://homeservicedata.org/api/v1/context/utility-territory
 ```
 
 Use this endpoint to explore which utilities operate in a state or city, or to find territories near a GPS coordinate.
@@ -118,7 +118,7 @@ Use this endpoint to explore which utilities operate in a state or city, or to f
 ## Resolve Utility Territory from Address
 
 ```
-GET https://homeservicedata.com/api/v1/context/utility-territory/resolve
+GET https://homeservicedata.org/api/v1/context/utility-territory/resolve
 ```
 
 Geocodes a postal address and returns the best-matched utility territory records. This endpoint performs a live geocode lookup when the address is not already in the resolver cache, so it counts against your resolve budget.
@@ -176,7 +176,7 @@ The response body is the full resolution object returned by the utility territor
 <CodeGroup>
 
 ```bash Browse by State
-curl -G https://homeservicedata.com/api/v1/context/utility-territory \
+curl -G https://homeservicedata.org/api/v1/context/utility-territory \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "state=CA" \
   --data-urlencode "city=San Jose" \
@@ -185,7 +185,7 @@ curl -G https://homeservicedata.com/api/v1/context/utility-territory \
 ```
 
 ```bash Resolve Address
-curl -G "https://homeservicedata.com/api/v1/context/utility-territory/resolve" \
+curl -G "https://homeservicedata.org/api/v1/context/utility-territory/resolve" \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "address=1600 Pennsylvania Ave NW, Washington, DC 20500" \
   --data-urlencode "limit=3"

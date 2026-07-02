@@ -9,7 +9,7 @@ The `/api/v1/hardware/inverters` endpoint returns a paginated list of solar inve
 ## Endpoint
 
 ```
-GET https://homeservicedata.com/api/v1/hardware/inverters
+GET https://homeservicedata.org/api/v1/hardware/inverters
 ```
 
 ## Authentication
@@ -127,22 +127,22 @@ A successful `200` response returns an `data` array of inverter record objects a
 
 <CodeGroup>
 ```bash All inverters (first page)
-curl https://homeservicedata.com/api/v1/hardware/inverters \
+curl https://homeservicedata.org/api/v1/hardware/inverters \
   -H "x-api-key: YOUR_API_KEY"
 ```
 
 ```bash Filter by manufacturer
-curl "https://homeservicedata.com/api/v1/hardware/inverters?manufacturer=Enphase&per_page=50" \
+curl "https://homeservicedata.org/api/v1/hardware/inverters?manufacturer=Enphase&per_page=50" \
   -H "x-api-key: YOUR_API_KEY"
 ```
 
 ```bash Partial SKU search
-curl "https://homeservicedata.com/api/v1/hardware/inverters?code=IQ8&is_default=true" \
+curl "https://homeservicedata.org/api/v1/hardware/inverters?code=IQ8&is_default=true" \
   -H "x-api-key: YOUR_API_KEY"
 ```
 
 ```bash Page 2 with custom page size
-curl "https://homeservicedata.com/api/v1/hardware/inverters?page=2&per_page=10" \
+curl "https://homeservicedata.org/api/v1/hardware/inverters?page=2&per_page=10" \
   -H "x-api-key: YOUR_API_KEY"
 ```
 </CodeGroup>

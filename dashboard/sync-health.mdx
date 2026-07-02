@@ -1,0 +1,51 @@
+---
+title: "Monitor Dataset Sync Health"
+sidebarTitle: "Sync Health"
+description: "Use the dashboard sync page to inspect dataset versions, freshness, cursors, record counts, and recovery URLs before wiring a cache or webhook consumer."
+---
+
+The Sync Health page is the customer-facing control plane for dataset versions and cursor recovery. Use it before building a local cache, scheduled sync job, or webhook consumer.
+
+## What You Can Inspect
+
+<CardGroup cols={2}>
+  <Card title="Current Versions" icon="database">
+    See each published dataset's current version number, last publish time, total record count, and quote-safe record count.
+  </Card>
+  <Card title="Freshness State" icon="clock">
+    Quickly distinguish fresh, recent, stale, and pending datasets before depending on them in production workflows.
+  </Card>
+  <Card title="Cursor Recovery" icon="refresh-cw">
+    Copy snapshot and changes URLs that include the current cursor so your integration can recover from missed polls.
+  </Card>
+  <Card title="Workspace Access" icon="shield-check">
+    Compare the dataset's sync state with your workspace entitlement level so you know whether a key should be able to read it.
+  </Card>
+</CardGroup>
+
+## Typical Workflow
+
+<Steps>
+  <Step title="Open Sync Health">
+    Sign in and open [Dashboard → Sync Health](https://homeservicedata.org/dashboard/sync).
+  </Step>
+  <Step title="Choose a dataset">
+    Find the dataset key your integration consumes, such as `finance_fees`, `utility_territory`, or `equipment_pricing`.
+  </Step>
+  <Step title="Copy the snapshot URL">
+    Use the snapshot URL to seed your local database from the current published version.
+  </Step>
+  <Step title="Store the cursor">
+    Save the displayed cursor after your snapshot finishes. Treat cursors as opaque tokens; never parse or construct them yourself.
+  </Step>
+  <Step title="Use the changes URL for recovery">
+    If your polling job or webhook consumer falls behind, copy the changes URL and replay from the stored cursor.
+  </Step>
+</Steps>
+
+## Related References
+
+- [Sync Model](/concepts/sync-model)
+- [Sync Snapshot](/api-reference/sync-snapshot)
+- [Sync Changes](/api-reference/sync-changes)
+- [Webhooks](/dashboard/webhooks)

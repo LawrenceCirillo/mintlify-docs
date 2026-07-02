@@ -9,7 +9,7 @@ The Search endpoint is a single, unified entry point for finding anything in the
 ## Endpoint
 
 ```
-GET https://homeservicedata.com/api/v1/search
+GET https://homeservicedata.org/api/v1/search
 ```
 
 ## Authentication
@@ -72,32 +72,32 @@ Records with the same score are further ordered by type priority: `equipment` â†
 <CodeGroup>
 ```http Basic search
 GET /api/v1/search?q=Goodman+HVAC HTTP/1.1
-Host: homeservicedata.com
+Host: homeservicedata.org
 x-api-key: YOUR_API_KEY
 ```
 
 ```http Filtered by trade and quote_safe
 GET /api/v1/search?q=Goodman+HVAC&trade=hvac&quote_safe=true HTTP/1.1
-Host: homeservicedata.com
+Host: homeservicedata.org
 x-api-key: YOUR_API_KEY
 ```
 
 ```http Scoped to a single result type
 GET /api/v1/search?q=Sunpower&type=equipment&trade=solar&limit=10 HTTP/1.1
-Host: homeservicedata.com
+Host: homeservicedata.org
 x-api-key: YOUR_API_KEY
 ```
 
 ```http Finance program search
 GET /api/v1/search?q=GoodLeap&type=finance&quote_safe=true HTTP/1.1
-Host: homeservicedata.com
+Host: homeservicedata.org
 x-api-key: YOUR_API_KEY
 ```
 </CodeGroup>
 
 ```typescript TypeScript example
 const response = await fetch(
-  "https://homeservicedata.com/api/v1/search?" +
+  "https://homeservicedata.org/api/v1/search?" +
     new URLSearchParams({
       q: "Goodman HVAC",
       trade: "hvac",
@@ -155,7 +155,7 @@ A successful response returns an array of result objects in `data`. The `meta` f
     }
   ],
   "error": null,
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 

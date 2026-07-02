@@ -1,7 +1,7 @@
 ---
 title: "GET /api/v1/quote-context — Bundled Quote Context"
 sidebarTitle: "Quote Context"
-description: "Single endpoint bundling finance products, equipment, incentives, climate data, labor adders, permits, and utility territory for any home-service quote."
+description: "Composite endpoint bundling finance products, equipment, incentives, climate data, labor adders, permits, utility territory, and coverage details for supported quote workflows."
 ---
 
 The `/api/v1/quote-context` endpoint is the primary entry point for building home-service quotes. Rather than stitching together five or six separate API calls, you send one GET request and receive finance options, equipment records, incentive eligibility, climate context, labor adders, permit requirements, and utility territory resolution in a single response. Every response also includes a `coverage` object that summarizes how many quote-safe records were returned and surfaces any data gaps or unresolved requirements so your quoting tool can decide whether it has enough information to present a price.
@@ -9,7 +9,7 @@ The `/api/v1/quote-context` endpoint is the primary entry point for building hom
 ## Request
 
 ```
-GET https://homeservicedata.com/api/v1/quote-context
+GET https://homeservicedata.org/api/v1/quote-context
 ```
 
 ### Authentication
@@ -257,7 +257,7 @@ All requests must include your API key in the `x-api-key` header. This endpoint 
 
 <CodeGroup>
 ```bash cURL
-curl -G https://homeservicedata.com/api/v1/quote-context \
+curl -G https://homeservicedata.org/api/v1/quote-context \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "trade=hvac" \
   --data-urlencode "state=GA" \
@@ -266,7 +266,7 @@ curl -G https://homeservicedata.com/api/v1/quote-context \
 ```
 
 ```bash cURL — with address
-curl -G https://homeservicedata.com/api/v1/quote-context \
+curl -G https://homeservicedata.org/api/v1/quote-context \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "trade=hvac" \
   --data-urlencode "address=123 Peachtree St NE, Atlanta, GA 30309" \
@@ -275,7 +275,7 @@ curl -G https://homeservicedata.com/api/v1/quote-context \
 ```
 
 ```bash cURL — solar with equipment filters
-curl -G https://homeservicedata.com/api/v1/quote-context \
+curl -G https://homeservicedata.org/api/v1/quote-context \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "trade=solar" \
   --data-urlencode "state=CA" \
@@ -346,6 +346,6 @@ curl -G https://homeservicedata.com/api/v1/quote-context \
     }
   },
   "error": null,
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```

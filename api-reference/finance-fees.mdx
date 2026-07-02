@@ -7,13 +7,13 @@ description: "Retrieve quote-safe dealer-fee and finance-program rows for solar,
 The `/api/v1/finance/fees` endpoint returns approved, quote-safe dealer-fee and finance-program rows from the `finance_fees` dataset. Every row returned has `quote_safe: true`, meaning it has passed verification review and is cleared for use in customer-facing quote calculations. Results are ordered by `financier_name` then `product_title` and reflect the most recently verified version of each fee record.
 
 <Note>
-  This endpoint requires **production** access to the `finance_fees` dataset. Sandbox-tier keys will receive a `403` response. [Request access →](https://homeservicedata.com/contact)
+  This endpoint requires **production** access to the `finance_fees` dataset. Sandbox-tier keys will receive a `403` response. [Request access →](https://homeservicedata.org/contact)
 </Note>
 
 ## Endpoint
 
 ```
-GET https://homeservicedata.com/api/v1/finance/fees
+GET https://homeservicedata.org/api/v1/finance/fees
 ```
 
 ## Request
@@ -21,7 +21,7 @@ GET https://homeservicedata.com/api/v1/finance/fees
 ### Headers
 
 <ParamField header="x-api-key" type="string" required>
-  Your API key. Pass the value exactly as shown in your [dashboard](https://homeservicedata.com/dashboard).
+  Your API key. Pass the value exactly as shown in your [dashboard](https://homeservicedata.org/dashboard).
 </ParamField>
 
 ### Query Parameters
@@ -147,7 +147,7 @@ A successful response returns an `application/json` object with a top-level `dat
 <CodeGroup>
 
 ```bash cURL
-curl -G https://homeservicedata.com/api/v1/finance/fees \
+curl -G https://homeservicedata.org/api/v1/finance/fees \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "trade=solar"
 ```
@@ -156,7 +156,7 @@ curl -G https://homeservicedata.com/api/v1/finance/fees \
 import requests
 
 resp = requests.get(
-    "https://homeservicedata.com/api/v1/finance/fees",
+    "https://homeservicedata.org/api/v1/finance/fees",
     headers={"x-api-key": "YOUR_API_KEY"},
     params={"trade": "solar"},
 )
@@ -165,7 +165,7 @@ records = resp.json()["data"]
 
 ```javascript JavaScript
 const res = await fetch(
-  "https://homeservicedata.com/api/v1/finance/fees?trade=solar",
+  "https://homeservicedata.org/api/v1/finance/fees?trade=solar",
   { headers: { "x-api-key": "YOUR_API_KEY" } }
 );
 const { data: records } = await res.json();

@@ -11,7 +11,7 @@ The labor endpoints provide two complementary datasets for building accurate cos
 ## Regional Labor Rates
 
 ```
-GET https://homeservicedata.com/api/v1/context/labor
+GET https://homeservicedata.org/api/v1/context/labor
 ```
 
 Returns BLS OEWS wage records for the specified trade and geography. Results default to the standard occupation code for the requested trade (HVAC: `49-9021`, Roofing: `47-2181`, Electrical: `47-2111`, Plumbing: `47-2152`, Solar: `47-2231`).
@@ -135,7 +135,7 @@ Returns BLS OEWS wage records for the specified trade and geography. Results def
 ## Labor Adders
 
 ```
-GET https://homeservicedata.com/api/v1/context/labor-adders
+GET https://homeservicedata.org/api/v1/context/labor-adders
 ```
 
 Returns per-task labor and material cost adders — complexity factors added on top of base labor rates to account for job-specific conditions such as attic installs, crane lifts, or extended line sets.
@@ -217,7 +217,7 @@ Returns per-task labor and material cost adders — complexity factors added on 
 <CodeGroup>
 
 ```bash Regional Labor Rates
-curl -G https://homeservicedata.com/api/v1/context/labor \
+curl -G https://homeservicedata.org/api/v1/context/labor \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "trade=hvac" \
   --data-urlencode "state=TX" \
@@ -226,7 +226,7 @@ curl -G https://homeservicedata.com/api/v1/context/labor \
 ```
 
 ```bash Labor Adders
-curl -G https://homeservicedata.com/api/v1/context/labor-adders \
+curl -G https://homeservicedata.org/api/v1/context/labor-adders \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "trade=hvac" \
   --data-urlencode "quote_safe=true" \

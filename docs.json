@@ -19,13 +19,13 @@
     "links": [
       {
         "label": "Request Access",
-        "href": "https://homeservicedata.com/contact"
+        "href": "https://homeservicedata.org/contact"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Dashboard",
-      "href": "https://homeservicedata.com/dashboard"
+      "href": "https://homeservicedata.org/dashboard"
     }
   },
   "navigation": {
@@ -65,7 +65,9 @@
             "pages": [
               "dashboard/catalog",
               "dashboard/playground",
-              "dashboard/api-keys"
+              "dashboard/api-keys",
+              "dashboard/sync-health",
+              "dashboard/webhooks"
             ]
           }
         ]

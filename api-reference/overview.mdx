@@ -1,21 +1,21 @@
 ---
 title: "Home Service Data REST API Overview"
 sidebarTitle: "Overview"
-description: "A complete reference for the Home Service Data REST API — base URL, authentication, response envelope, versioning, trades, and endpoint groups."
+description: "Reference for the Home Service Data REST API: base URL, authentication, response envelope, versioning, trades, endpoint groups, and trust metadata."
 ---
 
-The Home Service Data REST API gives quoting tools, CRMs, and sales platforms programmatic access to structured, source-verified data across five home-service trades. Every response is wrapped in a consistent envelope, every data row carries readiness signals, and the API is versioned so your integration stays stable as the dataset grows.
+The Home Service Data REST API gives quoting tools, CRMs, and sales platforms programmatic access to structured, source-labeled data across five home-service trades. Every response is wrapped in a consistent envelope, every data row carries readiness signals, and the API is versioned so your integration stays stable as the dataset grows.
 
 ## Base URL
 
 All API endpoints are served from a single base URL. The current stable version is `v1`.
 
 ```
-https://homeservicedata.com/api/v1
+https://homeservicedata.org/api/v1
 ```
 
 <Note>
-  Always use HTTPS. HTTP requests are not supported. Append endpoint paths directly to the base URL — for example, `https://homeservicedata.com/api/v1/search`.
+  Always use HTTPS. HTTP requests are not supported. Append endpoint paths directly to the base URL — for example, `https://homeservicedata.org/api/v1/search`.
 </Note>
 
 ## Authentication
@@ -24,7 +24,7 @@ Every request must include your API key in the `x-api-key` request header. There
 
 ```http
 GET /api/v1/search?q=Goodman HTTP/1.1
-Host: homeservicedata.com
+Host: homeservicedata.org
 x-api-key: YOUR_API_KEY
 ```
 
@@ -46,7 +46,23 @@ Every API response — whether successful or not — is wrapped in a standard th
     "page": 1,
     "per_page": 25,
     "total": 142,
-    "total_pages": 6
+    "total_pages": 6,
+    "request_id": "req_01J...",
+    "api_version": "2026-06-30",
+    "dataset_version": null,
+    "trust": {
+      "endpoint": "/api/v1/catalog/equipment",
+      "level": "mixed",
+      "use_case": "Browse entitled equipment records.",
+      "data_rights_note": "Use records according to quote-safe and entitlement labels.",
+      "required_response_fields": ["quote_safe", "source_url"]
+    },
+    "performance": {
+      "target_ms": 300,
+      "warn_ms": 600,
+      "max_response_bytes": 131072,
+      "basis": "server"
+    }
   }
 }
 ```
@@ -60,7 +76,7 @@ Every API response — whether successful or not — is wrapped in a standard th
 </ResponseField>
 
 <ResponseField name="meta" type="object | null">
-  Pagination context on list endpoints, `null` on error responses and on endpoints that do not paginate.
+  Request metadata, versioning, trust metadata, performance budgets, and optional pagination, coverage, or sync context. Some low-level responses may omit fields that do not apply.
 
   <Expandable title="meta fields">
     <ResponseField name="meta.page" type="number">
@@ -75,6 +91,21 @@ Every API response — whether successful or not — is wrapped in a standard th
     <ResponseField name="meta.total_pages" type="number">
       Total pages at the current `per_page` size.
     </ResponseField>
+    <ResponseField name="meta.request_id" type="string">
+      Stable request identifier matching the `X-HSD-Request-Id` response header.
+    </ResponseField>
+    <ResponseField name="meta.api_version" type="string">
+      Date-based API contract version matching the `X-HSD-API-Version` response header.
+    </ResponseField>
+    <ResponseField name="meta.dataset_version" type="string | null">
+      Dataset version or cursor when the endpoint can attach one. `null` when the endpoint is not tied to a single dataset version.
+    </ResponseField>
+    <ResponseField name="meta.trust" type="object">
+      Endpoint-level trust guidance: intended use, quote-safe/context level, data-rights note, and required fields to inspect.
+    </ResponseField>
+    <ResponseField name="meta.performance" type="object">
+      Endpoint performance budget metadata: target duration, warning duration, response-size budget, and measurement basis.
+    </ResponseField>
   </Expandable>
 </ResponseField>
 
@@ -84,7 +115,24 @@ An error response looks like this:
 {
   "data": null,
   "error": "Missing x-api-key header.",
-  "meta": null
+  "meta": {
+    "request_id": "req_01J...",
+    "api_version": "2026-06-30",
+    "dataset_version": null,
+    "trust": {
+      "endpoint": "/api/v1/search",
+      "level": "mixed",
+      "use_case": "Search across entitled datasets.",
+      "data_rights_note": "Use result-level quote-safe labels before quoting.",
+      "required_response_fields": ["quote_safe"]
+    },
+    "performance": {
+      "target_ms": 300,
+      "warn_ms": 600,
+      "max_response_bytes": 65536,
+      "basis": "server"
+    }
+  }
 }
 ```
 
@@ -163,7 +211,7 @@ The API uses URL-path versioning. The current version is **v1**. Breaking change
 
 ## Response Timing Headers
 
-Every response includes an `X-HSD-Duration-Ms` header reporting the server-side processing time in milliseconds, and a `Server-Timing` header with per-phase breakdowns (auth, database, access checks, search). These are useful for diagnosing latency in production integrations.
+Every response includes `X-HSD-Request-Id`, `X-HSD-API-Version`, `X-HSD-Duration-Ms`, and `X-HSD-Performance-State` headers. Most API responses also include a `Server-Timing` header with per-phase breakdowns such as auth, database, access checks, and route-specific work. These are useful for diagnosing latency and correlating support logs in production integrations.
 
 ## Further Reading
 

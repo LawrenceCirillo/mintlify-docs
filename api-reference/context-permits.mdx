@@ -1,15 +1,15 @@
 ---
 title: "GET /api/v1/context/permits — Permit Requirements"
 sidebarTitle: "Permits"
-description: "Query permit requirements, inspection rules, and fee schedules by trade, state, county, and city from official jurisdiction portals with quote-safe flags."
+description: "Query permit requirements, inspection rules, and fee schedules by trade, state, county, and city with source links and quote-safe flags."
 ---
 
-The permits context endpoint returns permit and code-compliance records for home-service trades across U.S. jurisdictions. Each record describes whether a permit is required, what inspections and documents are needed, and any associated fee structure. Data is sourced from official jurisdiction portals and AHJ websites. Records backed by verified, deterministic source data are marked `quote_safe: true`; records with ambiguous requirements, estimated fees, or unresolved code questions carry `quote_safe: false` and should be treated as directional context only.
+The permits context endpoint returns permit and code-compliance records for home-service trades across U.S. jurisdictions. Each record describes whether a permit is required, what inspections and documents are needed, and any associated fee structure. Records include source links where available. Records backed by deterministic reviewed source data are marked `quote_safe: true`; records with ambiguous requirements, estimated fees, or unresolved code questions carry `quote_safe: false` and should be treated as directional context only.
 
 **Endpoint**
 
 ```
-GET https://homeservicedata.com/api/v1/context/permits
+GET https://homeservicedata.org/api/v1/context/permits
 ```
 
 ## Query Parameters
@@ -138,7 +138,7 @@ GET https://homeservicedata.com/api/v1/context/permits
 <CodeGroup>
 
 ```bash cURL
-curl -G https://homeservicedata.com/api/v1/context/permits \
+curl -G https://homeservicedata.org/api/v1/context/permits \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "trade=hvac" \
   --data-urlencode "state=FL" \

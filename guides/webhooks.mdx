@@ -1,10 +1,10 @@
 ---
 title: "Get Notified When Home Service Data Datasets Update"
 sidebarTitle: "Webhooks"
-description: "Receive webhook events the moment a dataset is published or updated so your local cache and CRM records stay current without polling."
+description: "Receive signed webhook events when dataset versions are published, then pull deltas to keep local caches and CRM records aligned."
 ---
 
-Scheduled polling keeps your local database roughly in sync, but there is always a gap between when Home Service Data publishes a new dataset version and when your next cron job runs. Webhooks close that gap: every time a dataset version is published, Home Service Data emits a `dataset.version.published` event to your registered endpoint. Your handler can immediately pull the delta and apply it — so your data is current within seconds of a lender updating their rate sheet or a new incentive program going live.
+Scheduled polling keeps your local database roughly in sync, but there is always a gap between when Home Service Data publishes a new dataset version and when your next cron job runs. Webhooks reduce that gap: every time a dataset version is published, Home Service Data emits a `dataset.version.published` event to your registered endpoint. Your handler can pull the delta and apply it as soon as delivery succeeds.
 
 ## Event type
 
@@ -16,11 +16,12 @@ Home Service Data currently publishes one webhook event type:
 
 ## Webhook payload
 
-Every `dataset.version.published` event delivers a JSON payload with the following shape:
+Every webhook delivery posts a signed JSON body with this outer shape:
 
 ```json
 {
-  "event_type": "dataset.version.published",
+  "id": "evt_...",
+  "type": "dataset.version.published",
   "payload": {
     "dataset_key": "finance_fees",
     "version_id": "3f8a2c14-...",
@@ -36,10 +37,12 @@ Every `dataset.version.published` event delivers a JSON payload with the followi
     "trigger": "admin_publish",
     "published_by": "system",
     "published_at": "2025-01-15T14:32:00Z",
-    "pull_deltas_url": "https://homeservicedata.com/api/v1/sync/changes?dataset=finance_fees&since=finance_fees%3Av42%3A...",
-    "snapshot_url": "https://homeservicedata.com/api/v1/sync/snapshot?dataset=finance_fees&trade=hvac",
+    "pull_deltas_url": "https://homeservicedata.org/api/v1/sync/changes?dataset=finance_fees&since=finance_fees%3Av42%3A...",
+    "snapshot_url": "https://homeservicedata.org/api/v1/sync/snapshot?dataset=finance_fees&trade=hvac",
     "requires_snapshot": false
-  }
+  },
+  "createdAt": "2025-01-15T14:32:00Z",
+  "deliveryId": "del_..."
 }
 ```
 
@@ -67,22 +70,25 @@ The `pull_deltas_url` field is a ready-to-use URL that encodes exactly the delta
 When `requires_snapshot` is `true`, it means this is the first version ever published for the dataset (there is no previous cursor to delta from). In that case, use `snapshot_url` instead of `pull_deltas_url` to seed your local table.
 
 ```typescript
-if (event.payload.requires_snapshot) {
+const webhookDelivery = await request.json();
+const payload = webhookDelivery.payload;
+
+if (payload.requires_snapshot) {
   // First publish — fetch the full snapshot
-  const response = await fetch(event.payload.snapshot_url, {
+  const response = await fetch(payload.snapshot_url, {
     headers: { "x-api-key": process.env.HSD_API_KEY! },
   });
   const { data } = await response.json();
   await seedDatabase(data.records);
-  await db.setCursor(event.payload.dataset_key, data.sync.cursor);
+  await db.setCursor(payload.dataset_key, data.sync.cursor);
 } else {
   // Incremental update — pull only what changed
-  const response = await fetch(event.payload.pull_deltas_url, {
+  const response = await fetch(payload.pull_deltas_url, {
     headers: { "x-api-key": process.env.HSD_API_KEY! },
   });
   const { data } = await response.json();
   await applyChanges(data.changes);
-  await db.setCursor(event.payload.dataset_key, data.latest_cursor);
+  await db.setCursor(payload.dataset_key, data.latest_cursor);
 }
 ```
 
@@ -93,21 +99,41 @@ if (event.payload.requires_snapshot) {
     Deploy an HTTPS endpoint in your application that accepts `POST` requests. The endpoint must return `200 OK` within a few seconds or the delivery will be retried.
 
     ```typescript
+    import { createHmac, timingSafeEqual } from "node:crypto";
+
+    function verifyHsdSignature(secret: string, requestBody: string, timestamp: string, signatureHeader: string | null) {
+      const received = signatureHeader?.replace(/^sha256=/, "");
+      if (!received || !timestamp) return false;
+
+      const expected = createHmac("sha256", secret)
+        .update(`${timestamp}.${requestBody}`)
+        .digest("hex");
+
+      const receivedBuffer = Buffer.from(received, "hex");
+      const expectedBuffer = Buffer.from(expected, "hex");
+
+      return (
+        receivedBuffer.length === expectedBuffer.length &&
+        timingSafeEqual(receivedBuffer, expectedBuffer)
+      );
+    }
+
     // Your webhook handler — accepts POST requests at the registered URL
     export async function handleWebhook(request: Request): Promise<Response> {
-      const secret = request.headers.get("x-webhook-secret");
+      const rawBody = await request.text();
+      const timestamp = request.headers.get("X-HomeServiceData-Timestamp") ?? "";
+      const signature = request.headers.get("X-HomeServiceData-Signature");
 
-      // Always verify the secret before processing
-      if (secret !== process.env.HSD_WEBHOOK_SECRET) {
+      if (!verifyHsdSignature(process.env.HSD_WEBHOOK_SECRET!, rawBody, timestamp, signature)) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
       }
 
-      const body = await request.json();
-      const { event_type, payload } = body;
+      const body = JSON.parse(rawBody);
+      const { type, payload, deliveryId } = body;
 
-      if (event_type === "dataset.version.published") {
+      if (type === "dataset.version.published") {
         // Process asynchronously so you respond quickly
-        void processDatasetUpdate(payload);
+        void processDatasetUpdate(payload, deliveryId);
       }
 
       return Response.json({ received: true });
@@ -119,7 +145,7 @@ if (event.payload.requires_snapshot) {
       pull_deltas_url: string;
       snapshot_url: string;
       cursor: string;
-    }) {
+    }, deliveryId: string) {
       const url = payload.requires_snapshot
         ? payload.snapshot_url
         : payload.pull_deltas_url;
@@ -142,28 +168,24 @@ if (event.payload.requires_snapshot) {
       }
 
       await db.setCursor(payload.dataset_key, payload.cursor);
-      console.log(`[webhook] ${payload.dataset_key} updated to v${payload.cursor}`);
+      console.log(`[webhook] ${payload.dataset_key} updated to v${payload.cursor} from delivery ${deliveryId}`);
     }
     ```
 
   </Step>
-  <Step title="Register the endpoint in the Dashboard">
-    1. Open the **Dashboard** and navigate to **Settings → Webhooks**.
-    2. Click **Add endpoint**.
-    3. Enter your HTTPS endpoint URL.
-    4. Select the `dataset.version.published` event.
-    5. Click **Save**. The Dashboard will display a generated webhook secret.
+  <Step title="Register or review the endpoint in the Dashboard">
+    Open the **Dashboard → Webhooks** page to review configured endpoints, event filters, allowed host, signing algorithm, max attempts, delivery history, and replay state. Endpoint creation may be enabled by your account team while access is being provisioned.
   </Step>
   <Step title="Store the webhook secret">
-    Copy the webhook secret shown in the Dashboard and store it as an environment variable (e.g. `HSD_WEBHOOK_SECRET`). You will use it to verify incoming requests.
+    Store the endpoint secret as an environment variable (e.g. `HSD_WEBHOOK_SECRET`). You will use it to verify `X-HomeServiceData-Signature`.
   </Step>
   <Step title="Test the delivery">
-    Use the **Send test event** button in the Dashboard to fire a sample payload at your endpoint. Check your application logs to confirm the handler received the event and responded with `200 OK`.
+    Trigger a test or wait for the next dataset publish. Check **Dashboard → Webhooks** for signed attempts, response status, response preview, retries, and replay actions.
   </Step>
 </Steps>
 
 <Note>
-Always verify the `x-webhook-secret` header on every incoming request before processing the payload. Requests that do not include the correct secret should be rejected with a `401` or `403` response. Never trust the payload without this check.
+Always verify the HMAC signature before processing the payload. Requests that do not include a valid `X-HomeServiceData-Signature` should be rejected with a `401` or `403` response. Never trust the payload without this check.
 </Note>
 
 ## Retry behavior

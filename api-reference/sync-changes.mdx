@@ -11,7 +11,7 @@ Each change object carries an `operation` field (`upsert`, `delete`, or `superse
 ## Request
 
 ```
-GET https://homeservicedata.com/api/v1/sync/changes
+GET https://homeservicedata.org/api/v1/sync/changes
 ```
 
 ### Authentication
@@ -135,14 +135,14 @@ Each item in the `changes` array carries an `operation` field that tells you how
 
 <CodeGroup>
 ```bash cURL — poll for changes
-curl -G https://homeservicedata.com/api/v1/sync/changes \
+curl -G https://homeservicedata.org/api/v1/sync/changes \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "dataset=finance_fees" \
   --data-urlencode "since=v42:finance_fees:all"
 ```
 
 ```bash cURL — trade-filtered changes
-curl -G https://homeservicedata.com/api/v1/sync/changes \
+curl -G https://homeservicedata.org/api/v1/sync/changes \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "dataset=hvac_incentives" \
   --data-urlencode "since=v17:hvac_incentives:hvac" \
@@ -152,14 +152,14 @@ curl -G https://homeservicedata.com/api/v1/sync/changes \
 
 ```bash cURL — paginate through large change sets
 # Page 1
-curl -G https://homeservicedata.com/api/v1/sync/changes \
+curl -G https://homeservicedata.org/api/v1/sync/changes \
   -H "x-api-key: YOUR_API_KEY" \
   --data-urlencode "dataset=equipment_pricing" \
   --data-urlencode "since=v8:equipment_pricing:all" \
   --data-urlencode "limit=500"
 
 # If sync.has_more is true, follow sync.next_url directly:
-curl "https://homeservicedata.com/api/v1/sync/changes?dataset=equipment_pricing&since=v8%3Aequipment_pricing%3Aall%3A500" \
+curl "https://homeservicedata.org/api/v1/sync/changes?dataset=equipment_pricing&since=v8%3Aequipment_pricing%3Aall%3A500" \
   -H "x-api-key: YOUR_API_KEY"
 ```
 </CodeGroup>
@@ -240,7 +240,7 @@ curl "https://homeservicedata.com/api/v1/sync/changes?dataset=equipment_pricing&
     }
   },
   "error": null,
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 
@@ -269,7 +269,7 @@ curl "https://homeservicedata.com/api/v1/sync/changes?dataset=equipment_pricing&
     }
   },
   "error": null,
-  "meta": null
+  "meta": { "request_id": "req_01J...", "api_version": "2026-06-30" }
 }
 ```
 
@@ -283,7 +283,7 @@ async function syncDataset(dataset: string, storedCursor: string) {
 
   do {
     const res = await fetch(
-      `https://homeservicedata.com/api/v1/sync/changes?dataset=${dataset}&since=${encodeURIComponent(cursor)}`,
+      `https://homeservicedata.org/api/v1/sync/changes?dataset=${dataset}&since=${encodeURIComponent(cursor)}`,
       { headers: { "x-api-key": process.env.HSD_API_KEY } }
     );
     const { data } = await res.json();

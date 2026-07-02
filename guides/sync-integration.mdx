@@ -49,7 +49,7 @@ The sync process follows five deterministic steps. The cursor is the key primiti
 
     const hsd = createHsdClient({
       apiKey: process.env.HSD_API_KEY!,
-      baseUrl: "https://homeservicedata.com",
+      baseUrl: "https://homeservicedata.org",
     });
 
     async function runInitialSnapshot(dataset: HsdDatasetKey) {
@@ -86,7 +86,7 @@ The sync process follows five deterministic steps. The cursor is the key primiti
         "mode": "snapshot",
         "etag": "W/\"hsd:finance_fees:hvac:...:1000\"",
         "cursor": "finance_fees:v42:...",
-        "changes_url": "https://homeservicedata.com/api/v1/sync/changes?dataset=finance_fees&since=..."
+        "changes_url": "https://homeservicedata.org/api/v1/sync/changes?dataset=finance_fees&since=..."
       }
     }
     ```
@@ -204,7 +204,7 @@ import type { HsdDatasetKey } from "hsd-client-sdk";
 
 const hsd = createHsdClient({
   apiKey: process.env.HSD_API_KEY!,
-  baseUrl: "https://homeservicedata.com",
+  baseUrl: "https://homeservicedata.org",
 });
 
 const DATASETS_TO_SYNC: HsdDatasetKey[] = [
@@ -256,7 +256,7 @@ The snapshot response includes an `ETag` header. On subsequent requests, pass th
 const etag = await db.getEtag(dataset); // stored from previous response
 
 const response = await fetch(
-  `https://homeservicedata.com/api/v1/sync/snapshot?dataset=${dataset}`,
+  `https://homeservicedata.org/api/v1/sync/snapshot?dataset=${dataset}`,
   {
     headers: {
       "x-api-key": "YOUR_API_KEY",
